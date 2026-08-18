@@ -14,6 +14,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -51,9 +52,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,6 +64,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import java.util.Locale
+import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 private enum class AkujiState(val label: String) {
@@ -269,11 +274,7 @@ private fun AkujiBody(
     )
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF07050A))) {
-        Image(
-            painter = painterResource(R.drawable.akuji_full_body),
-            contentDescription = "AKUJI, the locked DEFF ROW visual identity",
-            contentScale = ContentScale.Crop,
-            alignment = Alignment.TopCenter,
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
@@ -283,7 +284,19 @@ private fun AkujiBody(
                     translationY = -(pulse * 7f)
                     rotationZ = (if (speechPulse % 2 == 0) 0.12f else -0.12f) * pulse
                 },
-        )
+        ) {
+            Image(
+                painter = painterResource(R.drawable.akuji_full_body),
+                contentDescription = "AKUJI, the locked DEFF ROW visual identity",
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            AkujiSpeechRig(
+                openness = if (state == AkujiState.Speaking) voiceMotion.value else 0f,
+            )
+        }
 
         Box(
             modifier = Modifier
@@ -432,5 +445,58 @@ private fun AkujiBody(
                 }
             }
         }
+    }
+}
+
+
+/**
+ * Phone-native speech rig for AKUJI's locked portrait.
+ *
+ * The face stays the approved source art. Android TTS range callbacks open the
+ * lips and lower the jaw. No avatar website or generated video loop is used.
+ */
+@Composable
+private fun AkujiSpeechRig(openness: Float) {
+    if (openness <= 0.01f) return
+
+    val portrait = ImageBitmap.imageResource(R.drawable.akuji_full_body)
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val imageWidth = portrait.width.toFloat()
+        val imageHeight = portrait.height.toFloat()
+        val cropScale = max(size.width / imageWidth, size.height / imageHeight)
+        val imageLeft = (size.width - imageWidth * cropScale) / 2f
+
+        fun sourceX(value: Float): Float = imageLeft + value * cropScale
+        fun sourceY(value: Float): Float = value * cropScale
+
+        val mouthLeft = sourceX(866f)
+        val mouthTop = sourceY(190f)
+        val mouthWidth = 72f * cropScale
+        val jawDrop = 5.5f * cropScale * openness
+        val mouthHeight = (10f * cropScale) + jawDrop
+
+        drawOval(
+            color = Color(0xD51A070D),
+            topLeft = androidx.compose.ui.geometry.Offset(mouthLeft, mouthTop),
+            size = androidx.compose.ui.geometry.Size(mouthWidth, mouthHeight),
+        )
+
+        val lowerLipSourceX = 847
+        val lowerLipSourceY = 198
+        val lowerLipSourceWidth = 112
+        val lowerLipSourceHeight = 36
+        drawImage(
+            image = portrait,
+            srcOffset = androidx.compose.ui.unit.IntOffset(lowerLipSourceX, lowerLipSourceY),
+            srcSize = androidx.compose.ui.unit.IntSize(lowerLipSourceWidth, lowerLipSourceHeight),
+            dstOffset = androidx.compose.ui.unit.IntOffset(
+                sourceX(lowerLipSourceX.toFloat()).roundToInt(),
+                (sourceY(lowerLipSourceY.toFloat()) + jawDrop).roundToInt(),
+            ),
+            dstSize = androidx.compose.ui.unit.IntSize(
+                (lowerLipSourceWidth * cropScale).roundToInt(),
+                (lowerLipSourceHeight * cropScale).roundToInt(),
+            ),
+        )
     }
 }
