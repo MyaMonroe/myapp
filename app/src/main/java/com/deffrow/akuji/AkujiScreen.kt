@@ -66,6 +66,7 @@ private enum class AkujiState(val label: String) {
     Thinking("THINKING"),
     Speaking("SPEAKING"),
     Importing("COPYING MODEL"),
+    Downloading("DOWNLOADING GEMMA"),
     Loading("LOADING MODEL"),
     ModelReady("LOCAL MODEL READY"),
     BrainError("MODEL ERROR"),
@@ -85,7 +86,7 @@ fun AkujiApp() {
     var caption by remember {
         mutableStateOf(
             if (brain.hasModel) "AKUJI's local model is connected."
-            else "AKUJI's body, voice, and memory are ready for a local model.",
+            else "AKUJI is ready to install Gemma 4 E2B directly on this phone.",
         )
     }
 
@@ -94,6 +95,31 @@ fun AkujiApp() {
             voice.shutdown()
             brain.close()
         }
+    }
+
+    suspend fun finishGemmaInstall() {
+        state = AkujiState.Downloading
+        caption = "Installing Gemma 4 E2B on Wi-Fi... 0%"
+        val download = brain.downloadRecommendedModel { progress ->
+            caption = "Installing Gemma 4 E2B on Wi-Fi... $progress%"
+        }
+        if (download.isFailure) {
+            caption = download.exceptionOrNull()?.message ?: "AKUJI could not install Gemma."
+            state = AkujiState.BrainError
+            return
+        }
+
+        state = AkujiState.Loading
+        caption = "Loading Gemma inside AKUJI..."
+        brain.prepare()
+            .onSuccess {
+                caption = "Gemma 4 E2B is connected to AKUJI's body, voice, and memory."
+                state = AkujiState.ModelReady
+            }
+            .onFailure {
+                caption = it.message ?: "Gemma could not start on this phone."
+                state = AkujiState.BrainError
+            }
     }
 
     LaunchedEffect(brain) {
@@ -105,35 +131,8 @@ fun AkujiApp() {
                     caption = it.message ?: "The local model could not start."
                     state = AkujiState.BrainError
                 }
-        }
-    }
-
-    val modelPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            state = AkujiState.Importing
-            caption = "Copying the local model into AKUJI..."
-            brain.importModel(uri) { progress ->
-                caption = "Copying the local model into AKUJI... $progress%"
-            }.onFailure {
-                caption = it.message ?: "AKUJI could not import that model."
-                state = AkujiState.BrainError
-                return@launch
-            }
-
-            state = AkujiState.Loading
-            caption = "Loading AKUJI's local model..."
-            brain.prepare()
-                .onSuccess {
-                    caption = "AKUJI's local model is connected to her body and voice."
-                    state = AkujiState.ModelReady
-                }
-                .onFailure {
-                    caption = it.message ?: "The local model could not start."
-                    state = AkujiState.BrainError
-                }
+        } else if (brain.hasPendingDownload) {
+            finishGemmaInstall()
         }
     }
 
@@ -211,7 +210,7 @@ fun AkujiApp() {
                 caption = caption,
                 onTalk = ::requestConversation,
                 hasModel = brain.hasModel,
-                onConnectModel = { modelPicker.launch(arrayOf("*/*")) },
+                onInstallGemma = { scope.launch { finishGemmaInstall() } },
             )
         }
     }
@@ -223,7 +222,7 @@ private fun AkujiBody(
     caption: String,
     onTalk: () -> Unit,
     hasModel: Boolean,
-    onConnectModel: () -> Unit,
+    onInstallGemma: () -> Unit,
 ) {
     val transition = rememberInfiniteTransition(label = "akuji-presence")
     val breath by transition.animateFloat(
@@ -351,7 +350,9 @@ private fun AkujiBody(
                     Button(
                         onClick = onTalk,
                         enabled = state != AkujiState.Listening &&
-                            state != AkujiState.Thinking,
+                            state != AkujiState.Thinking &&
+                            state != AkujiState.Downloading &&
+                            state != AkujiState.Loading,
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF241128),
@@ -380,8 +381,10 @@ private fun AkujiBody(
                 if (!hasModel) {
                     Spacer(Modifier.height(8.dp))
                     Button(
-                        onClick = onConnectModel,
-                        enabled = state != AkujiState.Importing && state != AkujiState.Loading,
+                        onClick = onInstallGemma,
+                        enabled = state != AkujiState.Importing &&
+                            state != AkujiState.Downloading &&
+                            state != AkujiState.Loading,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF120B16),
                             contentColor = Color(0xFFF1D99B),
@@ -393,7 +396,7 @@ private fun AkujiBody(
                         ),
                     ) {
                         Text(
-                            text = "CONNECT LOCAL BRAIN",
+                            text = "INSTALL GEMMA 4 E2B · WI-FI",
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
                             letterSpacing = 1.sp,

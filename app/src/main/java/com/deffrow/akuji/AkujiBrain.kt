@@ -1,5 +1,6 @@
 package com.deffrow.akuji
 
+import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.os.StatFs
@@ -13,7 +14,9 @@ import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.SamplerConfig
 import java.io.File
 import java.io.FileOutputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -93,6 +96,9 @@ class AkujiLocalModelBrain(
     private val modelDirectory = File(appContext.getExternalFilesDir(null), "models")
     private val modelFile = File(modelDirectory, "akuji-brain.litertlm")
     private val importFile = File(modelDirectory, "akuji-brain.importing")
+    private val downloadFile = File(modelDirectory, "akuji-brain.download")
+    private val downloadPreferences =
+        appContext.getSharedPreferences("akuji_model_download", Context.MODE_PRIVATE)
     private val runtimeLock = Mutex()
 
     private var engine: Engine? = null
@@ -103,6 +109,56 @@ class AkujiLocalModelBrain(
 
     val hasModel: Boolean
         get() = modelFile.isFile && modelFile.length() > 0L
+
+    val hasPendingDownload: Boolean
+        get() = downloadPreferences.getLong(DOWNLOAD_ID_KEY, -1L) >= 0L
+
+    suspend fun downloadRecommendedModel(
+        onProgress: suspend (Int) -> Unit,
+    ): Result<Unit> = runCatching {
+        closeRuntime()
+        withContext(Dispatchers.IO) {
+            modelDirectory.mkdirs()
+            val availableBytes = StatFs(modelDirectory.absolutePath).availableBytes
+            if (availableBytes < RECOMMENDED_MODEL_BYTES + MINIMUM_FREE_BYTES) {
+                error("This phone needs at least 2.9 GB free before AKUJI can install Gemma.")
+            }
+
+            val manager = appContext.getSystemService(DownloadManager::class.java)
+            var downloadId = downloadPreferences.getLong(DOWNLOAD_ID_KEY, -1L)
+            if (downloadId < 0L) {
+                downloadFile.delete()
+                val request = DownloadManager.Request(Uri.parse(RECOMMENDED_MODEL_URL))
+                    .setTitle("AKUJI local brain")
+                    .setDescription("Installing Gemma 4 E2B on this phone")
+                    .setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI)
+                    .setAllowedOverRoaming(false)
+                    .setNotificationVisibility(
+                        DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
+                    )
+                    .setDestinationInExternalFilesDir(
+                        appContext,
+                        null,
+                        "models/${downloadFile.name}",
+                    )
+                downloadId = manager.enqueue(request)
+                downloadPreferences.edit().putLong(DOWNLOAD_ID_KEY, downloadId).apply()
+            }
+
+            monitorDownload(manager, downloadId, onProgress)
+            check(downloadFile.isFile && downloadFile.length() == RECOMMENDED_MODEL_BYTES) {
+                "Gemma finished downloading, but the file size did not match Google's model."
+            }
+            modelFile.delete()
+            check(downloadFile.renameTo(modelFile)) { "AKUJI could not finish installing Gemma." }
+            downloadPreferences.edit().remove(DOWNLOAD_ID_KEY).apply()
+            withContext(Dispatchers.Main) { onProgress(100) }
+        }
+    }.onFailure {
+        if (it is CancellationException) throw it
+        downloadPreferences.edit().remove(DOWNLOAD_ID_KEY).apply()
+        downloadFile.delete()
+    }
 
     suspend fun importModel(uri: Uri, onProgress: suspend (Int) -> Unit): Result<Unit> =
         runCatching {
@@ -256,6 +312,37 @@ class AkujiLocalModelBrain(
         return -1L
     }
 
+    private suspend fun monitorDownload(
+        manager: DownloadManager,
+        downloadId: Long,
+        onProgress: suspend (Int) -> Unit,
+    ) {
+        while (true) {
+            val cursor = manager.query(DownloadManager.Query().setFilterById(downloadId))
+            cursor.use {
+                if (!it.moveToFirst()) error("Android could not find AKUJI's Gemma download.")
+                val status = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                val downloaded =
+                    it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                val total = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    .takeIf { bytes -> bytes > 0L }
+                    ?: RECOMMENDED_MODEL_BYTES
+                val progress = ((downloaded * 100L) / total).toInt().coerceIn(0, 100)
+                withContext(Dispatchers.Main) { onProgress(progress) }
+
+                when (status) {
+                    DownloadManager.STATUS_SUCCESSFUL -> return
+                    DownloadManager.STATUS_FAILED -> {
+                        val reason =
+                            it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                        error("Android could not download Gemma. Download error $reason.")
+                    }
+                }
+            }
+            delay(1_000L)
+        }
+    }
+
     private fun closeRuntime() {
         conversation?.close()
         conversation = null
@@ -270,6 +357,12 @@ class AkujiLocalModelBrain(
 
     private companion object {
         const val MINIMUM_FREE_BYTES = 256L * 1024L * 1024L
+        const val DOWNLOAD_ID_KEY = "gemma_4_e2b_download_id"
+        const val RECOMMENDED_MODEL_BYTES = 2_588_147_712L
+        const val RECOMMENDED_MODEL_URL =
+            "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/" +
+                "6e5c4f1e395deb959c494953478fa5cec4b8008f/gemma-4-E2B-it.litertlm" +
+                "?download=true"
         const val SYSTEM_INSTRUCTION =
             "You are AKUJI, Mya's private on-device AI inside the DEFF ROW system. " +
                 "Speak directly to Mya. Be concise, grounded, protective, candid, and useful. " +
