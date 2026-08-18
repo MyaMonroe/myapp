@@ -63,12 +63,14 @@ class VoiceService {
         onPartial(words);
         if (result.finalResult) onFinal(words);
       },
-      onDevice: true,
-      listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 3),
-      listenMode: ListenMode.confirmation,
-      partialResults: true,
-      cancelOnError: true,
+      listenOptions: SpeechListenOptions(
+        onDevice: true,
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 3),
+        listenMode: ListenMode.confirmation,
+        partialResults: true,
+        cancelOnError: true,
+      ),
     );
 
     if (_speech.hasError) {
