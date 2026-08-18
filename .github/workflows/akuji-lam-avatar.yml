@@ -1,9 +1,9 @@
 name: Generate AKUJI LAM Avatar
 
 on:
-  push:
+  pull_request:
     branches:
-      - akuji-lam-avatar
+      - main
     paths:
       - "lam/**"
       - ".github/workflows/akuji-lam-avatar.yml"
