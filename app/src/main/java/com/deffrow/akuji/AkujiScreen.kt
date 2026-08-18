@@ -35,9 +35,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,12 +58,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private enum class AkujiState(val label: String) {
     Awake("AWAKE"),
     Listening("LISTENING"),
-    Thinking("LOCAL CORE"),
+    Thinking("THINKING"),
     Speaking("SPEAKING"),
+    Importing("COPYING MODEL"),
+    Loading("LOADING MODEL"),
+    ModelReady("LOCAL MODEL READY"),
+    BrainError("MODEL ERROR"),
     MicrophoneBlocked("MICROPHONE BLOCKED"),
     VoiceUnavailable("VOICE UNAVAILABLE"),
 }
@@ -69,17 +76,65 @@ private enum class AkujiState(val label: String) {
 @Composable
 fun AkujiApp() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val memory = remember { AkujiMemoryStore(context) }
-    val brain = remember { LocalAkujiCore(memory) }
+    val brain = remember { AkujiLocalModelBrain(context, memory) }
     val voice = remember { AkujiVoice(context) }
 
     var state by remember { mutableStateOf(AkujiState.Awake) }
     var caption by remember {
-        mutableStateOf("AKUJI's permanent Android body is active on this phone.")
+        mutableStateOf(
+            if (brain.hasModel) "AKUJI's local model is connected."
+            else "AKUJI's body, voice, and memory are ready for a local model.",
+        )
     }
 
-    DisposableEffect(voice) {
-        onDispose { voice.shutdown() }
+    DisposableEffect(voice, brain) {
+        onDispose {
+            voice.shutdown()
+            brain.close()
+        }
+    }
+
+    LaunchedEffect(brain) {
+        if (brain.hasModel) {
+            state = AkujiState.Loading
+            brain.prepare()
+                .onSuccess { state = AkujiState.ModelReady }
+                .onFailure {
+                    caption = it.message ?: "The local model could not start."
+                    state = AkujiState.BrainError
+                }
+        }
+    }
+
+    val modelPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            state = AkujiState.Importing
+            caption = "Copying the local model into AKUJI..."
+            brain.importModel(uri) { progress ->
+                caption = "Copying the local model into AKUJI... $progress%"
+            }.onFailure {
+                caption = it.message ?: "AKUJI could not import that model."
+                state = AkujiState.BrainError
+                return@launch
+            }
+
+            state = AkujiState.Loading
+            caption = "Loading AKUJI's local model..."
+            brain.prepare()
+                .onSuccess {
+                    caption = "AKUJI's local model is connected to her body and voice."
+                    state = AkujiState.ModelReady
+                }
+                .onFailure {
+                    caption = it.message ?: "The local model could not start."
+                    state = AkujiState.BrainError
+                }
+        }
     }
 
     val speechLauncher = rememberLauncherForActivityResult(
@@ -94,21 +149,29 @@ fun AkujiApp() {
             return@rememberLauncherForActivityResult
         }
 
-        state = AkujiState.Thinking
-        val reply = brain.respond(spoken)
-        caption = reply.text
-
-        if (!reply.shouldSpeak) {
-            state = AkujiState.Awake
-            return@rememberLauncherForActivityResult
+        scope.launch {
+            state = AkujiState.Thinking
+            runCatching { brain.respond(spoken) }
+                .onSuccess { reply ->
+                    caption = reply.text
+                    if (!reply.shouldSpeak) {
+                        state = AkujiState.Awake
+                        return@onSuccess
+                    }
+                    voice.speak(
+                        text = reply.text,
+                        onStart = { state = AkujiState.Speaking },
+                        onDone = {
+                            state = if (brain.hasModel) AkujiState.ModelReady else AkujiState.Awake
+                        },
+                        onError = { state = AkujiState.VoiceUnavailable },
+                    )
+                }
+                .onFailure {
+                    caption = it.message ?: "The local brain could not answer."
+                    state = AkujiState.BrainError
+                }
         }
-
-        voice.speak(
-            text = reply.text,
-            onStart = { state = AkujiState.Speaking },
-            onDone = { state = AkujiState.Awake },
-            onError = { state = AkujiState.VoiceUnavailable },
-        )
     }
 
     fun startListening() {
@@ -147,6 +210,8 @@ fun AkujiApp() {
                 state = state,
                 caption = caption,
                 onTalk = ::requestConversation,
+                hasModel = brain.hasModel,
+                onConnectModel = { modelPicker.launch(arrayOf("*/*")) },
             )
         }
     }
@@ -157,6 +222,8 @@ private fun AkujiBody(
     state: AkujiState,
     caption: String,
     onTalk: () -> Unit,
+    hasModel: Boolean,
+    onConnectModel: () -> Unit,
 ) {
     val transition = rememberInfiniteTransition(label = "akuji-presence")
     val breath by transition.animateFloat(
@@ -310,6 +377,29 @@ private fun AkujiBody(
                     color = Color(0xFFAA9BAE),
                     fontSize = 11.sp,
                 )
+                if (!hasModel) {
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = onConnectModel,
+                        enabled = state != AkujiState.Importing && state != AkujiState.Loading,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF120B16),
+                            contentColor = Color(0xFFF1D99B),
+                        ),
+                        modifier = Modifier.border(
+                            1.dp,
+                            Color(0x66C9A84C),
+                            RoundedCornerShape(100.dp),
+                        ),
+                    ) {
+                        Text(
+                            text = "CONNECT LOCAL BRAIN",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.sp,
+                        )
+                    }
+                }
             }
         }
     }

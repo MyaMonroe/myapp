@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.deffrow.akuji"
-        minSdk = 26
+        minSdk = 31
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
@@ -47,6 +47,7 @@ kotlin {
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.11.0")
 
     val composeBom = platform("androidx.compose:compose-bom:2025.10.01")
     implementation(composeBom)
