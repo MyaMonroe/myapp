@@ -39,9 +39,9 @@ video_arg = {"video": handle_file(str(motion)), "subtitles": None}
 client = None
 result = None
 last_error = None
-for generation_attempt in range(1, 4):
+for generation_attempt in range(1, 2):
     try:
-        print(f"Opening LAM session (attempt {generation_attempt}/3)", flush=True)
+        print("Opening LAM session with official sample", flush=True)
         client = Client(SPACE, token=token, verbose=False, download_files=ARTIFACTS)
         client.predict(image_arg, api_name="/assert_input_image")
         client.predict(api_name="/prepare_working_dir")
@@ -71,7 +71,7 @@ for generation_attempt in range(1, 4):
         print(f"Retrying after {delay} seconds", flush=True)
         time.sleep(delay)
 
-(ARTIFACTS / "result.json").write_text(json.dumps({"result": repr(result)}, indent=2))
+(ARTIFACTS / "result.json").write_text(json.dumps({"result": repr(result)}, indent=2))\nraise RuntimeError("DIAGNOSTIC_SUCCESS: official LAM sample completed")
 
 print("Activating web renderer package", flush=True)
 client.predict(api_name="/doRender")
