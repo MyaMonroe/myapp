@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - akuji-android-foundation
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
