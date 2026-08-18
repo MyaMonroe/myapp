@@ -61,7 +61,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class AkujiState(val label: String) {
     Awake("AWAKE"),
@@ -71,6 +73,7 @@ private enum class AkujiState(val label: String) {
     Importing("COPYING MODEL"),
     Downloading("DOWNLOADING GEMMA"),
     Loading("LOADING MODEL"),
+    CoreImporting("IMPORTING CORE"),
     ModelReady("LOCAL MODEL READY"),
     BrainError("MODEL ERROR"),
     MicrophoneBlocked("MICROPHONE BLOCKED"),
@@ -82,7 +85,8 @@ fun AkujiApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val memory = remember { AkujiMemoryStore(context) }
-    val brain = remember { AkujiLocalModelBrain(context, memory) }
+    val core = remember { AkujiCoreStore(context) }
+    val brain = remember { AkujiLocalModelBrain(context, memory, core) }
     val voice = remember { AkujiVoice(context) }
 
     var state by remember { mutableStateOf(AkujiState.Awake) }
@@ -211,6 +215,48 @@ fun AkujiApp() {
         else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 
+    val coreImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        scope.launch {
+            state = AkujiState.CoreImporting
+            caption = "Copying AKUJI's core into private on-device storage..."
+            val imported = withContext(Dispatchers.IO) { core.import(uris) }
+            imported
+                .onSuccess { result ->
+                    brain.reloadCore()
+                        .onSuccess {
+                            caption = "AKUJI's permanent core is active. ${result.fileCount} file" +
+                                if (result.fileCount == 1) " was imported." else "s were imported."
+                            state = if (brain.hasModel) AkujiState.ModelReady else AkujiState.Awake
+                        }
+                        .onFailure {
+                            caption = it.message ?: "The core was saved, but the model could not reload."
+                            state = AkujiState.BrainError
+                        }
+                }
+                .onFailure {
+                    caption = it.message ?: "AKUJI could not import that core."
+                    state = AkujiState.BrainError
+                }
+        }
+    }
+
+    fun importCore() {
+        coreImportLauncher.launch(
+            arrayOf(
+                "text/plain",
+                "application/json",
+                "text/markdown",
+                "application/javascript",
+                "text/html",
+                "application/xml",
+                "application/zip",
+            ),
+        )
+    }
+
     MaterialTheme {
         Surface(color = Color.Black, modifier = Modifier.fillMaxSize()) {
             AkujiBody(
@@ -219,7 +265,9 @@ fun AkujiApp() {
                 speechPulse = speechPulse,
                 onTalk = ::requestConversation,
                 hasModel = brain.hasModel,
+                hasCore = core.hasCore,
                 onInstallGemma = { scope.launch { finishGemmaInstall() } },
+                onImportCore = ::importCore,
             )
         }
     }
@@ -232,7 +280,9 @@ private fun AkujiBody(
     speechPulse: Int,
     onTalk: () -> Unit,
     hasModel: Boolean,
+    hasCore: Boolean,
     onInstallGemma: () -> Unit,
+    onImportCore: () -> Unit,
 ) {
     val voiceMotion = remember { Animatable(0f) }
     LaunchedEffect(speechPulse) {
@@ -267,16 +317,6 @@ private fun AkujiBody(
         ),
         label = "aura",
     )
-    val mouthMotion by transition.animateFloat(
-        initialValue = 0.12f,
-        targetValue = if (state == AkujiState.Speaking) 1f else 0.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(if (state == AkujiState.Speaking) 145 else 900),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "mouth",
-    )
-
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF07050A))) {
         Box(
             modifier = Modifier
@@ -297,17 +337,6 @@ private fun AkujiBody(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            if (state == AkujiState.Speaking) {
-                Image(
-                    painter = painterResource(R.drawable.akuji_speaking),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.TopCenter,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .alpha(mouthMotion),
-                )
-            }
         }
 
         Box(
@@ -426,10 +455,37 @@ private fun AkujiBody(
 
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Voice + memory stay on this phone",
+                    text = if (hasCore) {
+                        "Voice + memory + AKUJI core stay on this phone"
+                    } else {
+                        "Voice + memory stay on this phone"
+                    },
                     color = Color(0xFFAA9BAE),
                     fontSize = 11.sp,
                 )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = onImportCore,
+                    enabled = state != AkujiState.CoreImporting &&
+                        state != AkujiState.Downloading &&
+                        state != AkujiState.Loading,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF120B16),
+                        contentColor = Color(0xFFF1D99B),
+                    ),
+                    modifier = Modifier.border(
+                        1.dp,
+                        Color(0x66C9A84C),
+                        RoundedCornerShape(100.dp),
+                    ),
+                ) {
+                    Text(
+                        text = if (hasCore) "UPDATE AKUJI CORE" else "IMPORT AKUJI CORE",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.sp,
+                    )
+                }
                 if (!hasModel) {
                     Spacer(Modifier.height(8.dp))
                     Button(
@@ -459,5 +515,3 @@ private fun AkujiBody(
         }
     }
 }
-
-

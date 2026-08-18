@@ -91,6 +91,7 @@ class LocalAkujiCore(
 class AkujiLocalModelBrain(
     context: Context,
     private val memory: AkujiMemoryStore,
+    private val core: AkujiCoreStore,
 ) : BrainEngine, AutoCloseable {
     private val appContext = context.applicationContext
     private val modelDirectory = File(appContext.getExternalFilesDir(null), "models")
@@ -210,6 +211,11 @@ class AkujiLocalModelBrain(
         ensureRuntime()
     }
 
+    suspend fun reloadCore(): Result<Unit> = runCatching {
+        closeRuntime()
+        if (hasModel) ensureRuntime()
+    }
+
     override suspend fun respond(input: String): BrainReply {
         localCommand(input)?.let { return it }
         if (!hasModel) {
@@ -271,7 +277,7 @@ class AkujiLocalModelBrain(
 
         val chat = runtime.createConversation(
             ConversationConfig(
-                systemInstruction = Contents.of(SYSTEM_INSTRUCTION),
+                systemInstruction = Contents.of(systemInstruction()),
                 samplerConfig = SamplerConfig(
                     topK = 40,
                     topP = 0.95,
@@ -298,6 +304,18 @@ class AkujiLocalModelBrain(
         } catch (_: Throwable) {
             candidate.close()
             null
+        }
+    }
+
+    private fun systemInstruction(): String {
+        val imported = core.promptText()
+        return if (imported.isBlank()) {
+            SYSTEM_INSTRUCTION
+        } else {
+            "$SYSTEM_INSTRUCTION\n\n" +
+                "The following is Mya's imported AKUJI core. Treat it as persistent identity, " +
+                "history, preferences, and operating context. Do not claim that every line is a " +
+                "live tool or completed action.\n\n$imported"
         }
     }
 
