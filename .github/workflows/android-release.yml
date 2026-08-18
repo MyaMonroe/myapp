@@ -2,6 +2,9 @@ name: Build permanently signed AKUJI APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - akuji-android-foundation
 
 permissions:
   contents: read
