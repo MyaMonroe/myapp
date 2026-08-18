@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate:
@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Check out private AKUJI build
         uses: actions/checkout@v4
+        with:
+          ref: akuji-lam-avatar
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,6 +39,20 @@ jobs:
           set -o pipefail
           mkdir -p artifacts
           python -u lam/run_lam.py 2>&1 | tee artifacts/lam-run.log
+
+      - name: Return verified package to private branch
+        if: success()
+        shell: bash
+        run: |
+          mkdir -p generated-avatar
+          cp artifacts/AKUJI-h5-render-data.zip generated-avatar/
+          cp artifacts/AKUJI-h5-contents.txt generated-avatar/
+          cp artifacts/result.json generated-avatar/
+          git config user.name "AKUJI Build"
+          git config user.email "actions@users.noreply.github.com"
+          git add generated-avatar
+          git commit -m "Store verified AKUJI LAM avatar package [skip ci]"
+          git push origin HEAD:akuji-lam-avatar
 
       - name: Upload AKUJI avatar artifacts
         if: always()
