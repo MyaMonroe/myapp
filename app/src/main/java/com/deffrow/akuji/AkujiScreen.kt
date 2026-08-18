@@ -8,6 +8,8 @@ import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -38,6 +40,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -83,6 +86,7 @@ fun AkujiApp() {
     val voice = remember { AkujiVoice(context) }
 
     var state by remember { mutableStateOf(AkujiState.Awake) }
+    var speechPulse by remember { mutableIntStateOf(0) }
     var caption by remember {
         mutableStateOf(
             if (brain.hasModel) "AKUJI's local model is connected."
@@ -159,7 +163,11 @@ fun AkujiApp() {
                     }
                     voice.speak(
                         text = reply.text,
-                        onStart = { state = AkujiState.Speaking },
+                        onStart = {
+                            state = AkujiState.Speaking
+                            speechPulse += 1
+                        },
+                        onSpeechPulse = { speechPulse += 1 },
                         onDone = {
                             state = if (brain.hasModel) AkujiState.ModelReady else AkujiState.Awake
                         },
@@ -208,6 +216,7 @@ fun AkujiApp() {
             AkujiBody(
                 state = state,
                 caption = caption,
+                speechPulse = speechPulse,
                 onTalk = ::requestConversation,
                 hasModel = brain.hasModel,
                 onInstallGemma = { scope.launch { finishGemmaInstall() } },
@@ -220,10 +229,25 @@ fun AkujiApp() {
 private fun AkujiBody(
     state: AkujiState,
     caption: String,
+    speechPulse: Int,
     onTalk: () -> Unit,
     hasModel: Boolean,
     onInstallGemma: () -> Unit,
 ) {
+    val voiceMotion = remember { Animatable(0f) }
+    LaunchedEffect(speechPulse) {
+        if (speechPulse > 0) {
+            voiceMotion.snapTo(1f)
+            voiceMotion.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(
+                    durationMillis = 180,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        }
+    }
+
     val transition = rememberInfiniteTransition(label = "akuji-presence")
     val breath by transition.animateFloat(
         initialValue = 1f,
@@ -253,8 +277,11 @@ private fun AkujiBody(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    scaleX = breath
-                    scaleY = breath
+                    val pulse = if (state == AkujiState.Speaking) voiceMotion.value else 0f
+                    scaleX = breath + (pulse * 0.004f)
+                    scaleY = breath + (pulse * 0.010f)
+                    translationY = -(pulse * 7f)
+                    rotationZ = (if (speechPulse % 2 == 0) 0.12f else -0.12f) * pulse
                 },
         )
 
