@@ -58,7 +58,7 @@ class ModelService {
     required String coreInstruction,
     required String memoryContext,
   }) async {
-    final selection = await FilePicker.platform.pickFiles(
+    final selection = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['litertlm', 'task', 'bin', 'tflite'],
       allowMultiple: false,
@@ -112,7 +112,11 @@ class ModelService {
     }
 
     await chat.addQueryChunk(Message.text(text: prompt.trim(), isUser: true));
-    return (await chat.generateChatResponse()).trim();
+    final response = await chat.generateChatResponse();
+    if (response is TextResponse) return response.token.trim();
+    throw StateError(
+      'The local model returned a non-text response without an enabled tool.',
+    );
   }
 
   Future<void> _openActiveModel({
