@@ -272,6 +272,15 @@ private fun AkujiBody(
         ),
         label = "aura",
     )
+    val mouthMotion by transition.animateFloat(
+        initialValue = 0.12f,
+        targetValue = if (state == AkujiState.Speaking) 1f else 0.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(if (state == AkujiState.Speaking) 145 else 900),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "mouth",
+    )
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF07050A))) {
         Box(
@@ -294,7 +303,7 @@ private fun AkujiBody(
             )
 
             AkujiSpeechRig(
-                openness = if (state == AkujiState.Speaking) voiceMotion.value else 0f,
+                openness = if (state == AkujiState.Speaking) mouthMotion else 0f,
             )
         }
 
@@ -469,11 +478,11 @@ private fun AkujiSpeechRig(openness: Float) {
         fun sourceX(value: Float): Float = imageLeft + value * cropScale
         fun sourceY(value: Float): Float = value * cropScale
 
-        val mouthLeft = sourceX(866f)
-        val mouthTop = sourceY(190f)
-        val mouthWidth = 72f * cropScale
-        val jawDrop = 5.5f * cropScale * openness
-        val mouthHeight = (10f * cropScale) + jawDrop
+        val mouthLeft = sourceX(881f)
+        val mouthTop = sourceY(170f)
+        val mouthWidth = 64f * cropScale
+        val jawDrop = 7f * cropScale * openness
+        val mouthHeight = (7f * cropScale) + jawDrop
 
         drawOval(
             color = Color(0xD51A070D),
@@ -481,10 +490,10 @@ private fun AkujiSpeechRig(openness: Float) {
             size = androidx.compose.ui.geometry.Size(mouthWidth, mouthHeight),
         )
 
-        val lowerLipSourceX = 847
-        val lowerLipSourceY = 198
-        val lowerLipSourceWidth = 112
-        val lowerLipSourceHeight = 36
+        val lowerLipSourceX = 874
+        val lowerLipSourceY = 177
+        val lowerLipSourceWidth = 80
+        val lowerLipSourceHeight = 26
         drawImage(
             image = portrait,
             srcOffset = androidx.compose.ui.unit.IntOffset(lowerLipSourceX, lowerLipSourceY),
