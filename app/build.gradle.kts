@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+val akujiSigningFile = rootProject.file(".signing/signing.properties")
+val akujiSigning = Properties().apply {
+    if (akujiSigningFile.isFile) {
+        akujiSigningFile.inputStream().use(::load)
+    }
 }
 
 android {
@@ -16,8 +25,22 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        create("akujiRelease") {
+            if (akujiSigningFile.isFile) {
+                storeFile = rootProject.file(".signing/${akujiSigning.getProperty("storeFile")}")
+                storePassword = akujiSigning.getProperty("storePassword")
+                keyAlias = akujiSigning.getProperty("keyAlias")
+                keyPassword = akujiSigning.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (akujiSigningFile.isFile) {
+                signingConfig = signingConfigs.getByName("akujiRelease")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
