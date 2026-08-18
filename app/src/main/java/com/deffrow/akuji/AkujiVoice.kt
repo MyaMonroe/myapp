@@ -24,29 +24,58 @@ class AkujiVoice(context: Context) : TextToSpeech.OnInitListener {
         textToSpeech.setPitch(0.96f)
         textToSpeech.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
-                mainHandler.post { pending?.onStart?.invoke() }
+                mainHandler.post {
+                    pending
+                        ?.takeIf { it.utteranceId == utteranceId }
+                        ?.let {
+                            it.onStart()
+                            it.onSpeechPulse()
+                        }
+                }
+            }
+
+            override fun onRangeStart(
+                utteranceId: String?,
+                start: Int,
+                end: Int,
+                frame: Int,
+            ) {
+                mainHandler.post {
+                    pending
+                        ?.takeIf { it.utteranceId == utteranceId }
+                        ?.onSpeechPulse
+                        ?.invoke()
+                }
             }
 
             override fun onDone(utteranceId: String?) {
                 mainHandler.post {
-                    pending?.onDone?.invoke()
-                    pending = null
+                    pending
+                        ?.takeIf { it.utteranceId == utteranceId }
+                        ?.let {
+                            it.onDone()
+                            pending = null
+                        }
                 }
             }
 
             @Deprecated("Deprecated in Android")
             override fun onError(utteranceId: String?) {
-                finishWithError()
+                finishWithError(utteranceId)
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
-                finishWithError()
+                finishWithError(utteranceId)
             }
 
-            private fun finishWithError() {
+            private fun finishWithError(utteranceId: String?) {
                 mainHandler.post {
-                    pending?.onError?.invoke()
-                    pending = null
+                    pending
+                        ?.takeIf { it.utteranceId == utteranceId }
+                        ?.let {
+                            it.onError()
+                            pending = null
+                        }
                 }
             }
         })
@@ -57,20 +86,27 @@ class AkujiVoice(context: Context) : TextToSpeech.OnInitListener {
     fun speak(
         text: String,
         onStart: () -> Unit,
+        onSpeechPulse: () -> Unit = {},
         onDone: () -> Unit,
         onError: () -> Unit,
     ) {
-        pending = PendingSpeech(text, onStart, onDone, onError)
+        pending = PendingSpeech(
+            utteranceId = UUID.randomUUID().toString(),
+            text = text,
+            onStart = onStart,
+            onSpeechPulse = onSpeechPulse,
+            onDone = onDone,
+            onError = onError,
+        )
         if (ready) speakNow(pending ?: return)
     }
 
     private fun speakNow(request: PendingSpeech) {
-        val utteranceId = UUID.randomUUID().toString()
         textToSpeech.speak(
             request.text,
             TextToSpeech.QUEUE_FLUSH,
             Bundle(),
-            utteranceId,
+            request.utteranceId,
         )
     }
 
@@ -85,8 +121,10 @@ class AkujiVoice(context: Context) : TextToSpeech.OnInitListener {
     }
 
     private data class PendingSpeech(
+        val utteranceId: String,
         val text: String,
         val onStart: () -> Unit,
+        val onSpeechPulse: () -> Unit,
         val onDone: () -> Unit,
         val onError: () -> Unit,
     )
