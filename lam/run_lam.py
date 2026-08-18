@@ -1,7 +1,6 @@
 import base64
 import json
 import os
-import shutil
 import time
 import zipfile
 from pathlib import Path
@@ -33,27 +32,45 @@ with requests.get(motion_url, stream=True, timeout=120) as response:
 print(f"Motion ready: {motion.name} ({motion.stat().st_size} bytes)", flush=True)
 
 token = os.getenv("HF_TOKEN") or None
-client = Client(SPACE, token=token, verbose=False, download_files=ARTIFACTS)
+print(f"Hugging Face authentication present: {bool(token)}", flush=True)
 image_arg = handle_file(str(portrait))
 video_arg = {"video": handle_file(str(motion)), "subtitles": None}
 
-print("Opening LAM session", flush=True)
-client.predict(image_arg, api_name="/assert_input_image")
-client.predict(api_name="/prepare_working_dir")
+client = None
+result = None
+last_error = None
+for generation_attempt in range(1, 4):
+    try:
+        print(f"Opening LAM session (attempt {generation_attempt}/3)", flush=True)
+        client = Client(SPACE, token=token, verbose=False, download_files=ARTIFACTS)
+        client.predict(image_arg, api_name="/assert_input_image")
+        client.predict(api_name="/prepare_working_dir")
 
-print("Generating AKUJI 3D avatar", flush=True)
-job = client.submit(image_arg, video_arg, api_name="/core_fn")
-last = None
-while not job.done():
-    status = job.status()
-    current = (str(status.code), status.rank, status.queue_size)
-    if current != last:
-        print(f"LAM status: {current}", flush=True)
-        last = current
-    time.sleep(5)
+        print("Generating AKUJI 3D avatar", flush=True)
+        job = client.submit(image_arg, video_arg, api_name="/core_fn")
+        last = None
+        while not job.done():
+            status = job.status()
+            current = (str(status.code), status.rank, status.queue_size, status.success)
+            if current != last:
+                print(f"LAM status: {current}", flush=True)
+                last = current
+            time.sleep(5)
 
-result = job.result()
-print(f"LAM result: {result!r}", flush=True)
+        final_status = job.status()
+        print(f"LAM final status: {final_status!r}", flush=True)
+        result = job.result()
+        print(f"LAM result: {result!r}", flush=True)
+        break
+    except Exception as error:
+        last_error = error
+        print(f"LAM attempt {generation_attempt} ended with {type(error).__name__}: {error!r}", flush=True)
+        if generation_attempt == 3:
+            raise
+        delay = 20 * generation_attempt
+        print(f"Retrying after {delay} seconds", flush=True)
+        time.sleep(delay)
+
 (ARTIFACTS / "result.json").write_text(json.dumps({"result": repr(result)}, indent=2))
 
 print("Activating web renderer package", flush=True)
