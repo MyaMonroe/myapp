@@ -1,0 +1,48 @@
+name: Generate AKUJI LAM Avatar
+
+on:
+  push:
+    branches:
+      - akuji-lam-avatar
+    paths:
+      - "lam/**"
+      - ".github/workflows/akuji-lam-avatar.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+    steps:
+      - name: Check out private AKUJI build
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install client
+        run: pip install --disable-pip-version-check gradio_client requests
+
+      - name: Generate LAM avatar package
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -u lam/run_lam.py 2>&1 | tee artifacts/lam-run.log
+
+      - name: Upload AKUJI avatar artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AKUJI-LAM-avatar
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30
