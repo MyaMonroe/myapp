@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
             fun beginLiveVoice() {
                 if (liveActive) return
                 liveStatus = "CONNECTING LIVE VOICE"
-                liveCaption = ""
+                liveCaption = "Waiting for the microphone conversation to become active..."
                 scope.launch {
                     runCatching {
                         liveVoice.start(
@@ -69,8 +69,9 @@ class MainActivity : ComponentActivity() {
                             },
                         )
                     }.onSuccess {
-                        liveActive = liveVoice.isActive
-                        liveStatus = if (liveActive) "LIVE VOICE" else "LIVE READY"
+                        liveActive = true
+                        liveStatus = "LIVE LISTENING"
+                        liveCaption = "Mic is active. Speak to AKUJI normally."
                     }.onFailure { error ->
                         liveActive = false
                         liveStatus = "LIVE ERROR"
