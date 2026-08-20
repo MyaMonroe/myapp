@@ -1,8 +1,9 @@
 # AKUJI Hermes runtime configuration.
-# Secrets stay in process environment / .env on the host, never in this file.
+# Secrets stay in process environment / auth store on the host, never in this file.
 
-# Leave the main model unset until a provider is authenticated on the host.
-model: ""
+model:
+  provider: minimax-oauth
+  default: MiniMax-M2.7
 
 # Unattended-agent circuit breaker. Stop repeated failing/no-progress tool loops.
 tool_loop_guardrails:
