@@ -1,6 +1,7 @@
 package com.deffrow.akuji
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
@@ -13,7 +14,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -38,8 +41,12 @@ import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderF
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private val incomingShare = mutableStateOf<AkujiIncomingShare?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        incomingShare.value = extractAkujiIncomingShare(applicationContext, intent)
 
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
             PlayIntegrityAppCheckProviderFactory.getInstance(),
@@ -49,18 +56,25 @@ class MainActivity : ComponentActivity() {
         setContent {
             val scope = rememberCoroutineScope()
             val liveVoice = remember { AkujiLiveVoice(this@MainActivity.applicationContext) }
+            val sharedItem = incomingShare.value
             var showSkills by rememberSaveable { mutableStateOf(false) }
             var liveActive by remember { mutableStateOf(false) }
             var liveStatus by remember { mutableStateOf("LIVE OFF") }
             var liveCaption by remember { mutableStateOf("") }
+            var pendingSessionContext by remember { mutableStateOf<String?>(null) }
 
-            fun beginLiveVoice() {
+            fun beginLiveVoice(sessionContext: String?) {
                 if (liveActive) return
                 liveStatus = "CONNECTING LIVE VOICE"
-                liveCaption = "Loading AKUJI skills and waiting for the microphone conversation to become active..."
+                liveCaption = if (sessionContext.isNullOrBlank()) {
+                    "Loading AKUJI skills and waiting for the microphone conversation to become active..."
+                } else {
+                    "Loading AKUJI skills plus the item you shared..."
+                }
                 scope.launch {
                     runCatching {
                         liveVoice.start(
+                            sessionContext = sessionContext,
                             onInputTranscript = { text ->
                                 scope.launch { liveCaption = "YOU: $text" }
                             },
@@ -70,10 +84,14 @@ class MainActivity : ComponentActivity() {
                         )
                     }.onSuccess {
                         liveActive = true
-                        liveStatus = "LIVE LISTENING"
+                        liveStatus = if (sessionContext.isNullOrBlank()) "LIVE LISTENING" else "LIVE + SHARED ITEM"
                         val count = liveVoice.bundledSkillCount
-                        liveCaption = "Mic is active. $count bundled AKUJI skill" +
-                            if (count == 1) " is active." else "s are active."
+                        liveCaption = if (sessionContext.isNullOrBlank()) {
+                            "Mic is active. $count bundled AKUJI skill" +
+                                if (count == 1) " is active." else "s are active."
+                        } else {
+                            "Mic is active. $count bundled skills + your shared item are loaded."
+                        }
                     }.onFailure { error ->
                         liveActive = false
                         liveStatus = "LIVE ERROR"
@@ -86,12 +104,23 @@ class MainActivity : ComponentActivity() {
                 contract = ActivityResultContracts.RequestPermission(),
             ) { granted ->
                 if (granted) {
-                    beginLiveVoice()
+                    beginLiveVoice(pendingSessionContext)
                 } else {
                     liveActive = false
                     liveStatus = "MICROPHONE BLOCKED"
                     liveCaption = "AKUJI needs microphone permission for Live voice."
                 }
+            }
+
+            fun requestLiveVoice(sessionContext: String?) {
+                pendingSessionContext = sessionContext
+                val granted = ContextCompat.checkSelfPermission(
+                    this@MainActivity,
+                    Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (granted) beginLiveVoice(sessionContext)
+                else livePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
 
             fun toggleLiveVoice() {
@@ -103,13 +132,16 @@ class MainActivity : ComponentActivity() {
                     return
                 }
 
-                val granted = ContextCompat.checkSelfPermission(
-                    this@MainActivity,
-                    Manifest.permission.RECORD_AUDIO,
-                ) == PackageManager.PERMISSION_GRANTED
+                requestLiveVoice(sharedItem?.liveContext)
+            }
 
-                if (granted) beginLiveVoice()
-                else livePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            fun loadSharedIntoLive() {
+                val item = sharedItem ?: return
+                if (liveActive || liveVoice.isActive) {
+                    liveVoice.stop()
+                    liveActive = false
+                }
+                requestLiveVoice(item.liveContext)
             }
 
             DisposableEffect(liveVoice) {
@@ -190,8 +222,62 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+
+                    sharedItem?.let { item ->
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(start = 18.dp, end = 18.dp, bottom = 24.dp)
+                                .fillMaxWidth()
+                                .background(Color(0xEE120B16), RoundedCornerShape(20.dp))
+                                .border(1.dp, Color(0x88C9A84C), RoundedCornerShape(20.dp))
+                                .padding(14.dp),
+                        ) {
+                            Text(
+                                text = "SHARED TO AKUJI",
+                                color = Color(0xFFF1D99B),
+                                fontWeight = FontWeight.Black,
+                                fontSize = 10.sp,
+                                letterSpacing = 1.1.sp,
+                            )
+                            Text(
+                                text = item.title,
+                                color = Color(0xFFF7EEDC),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(top = 5.dp),
+                            )
+                            Text(
+                                text = item.summary,
+                                color = Color(0xFFB9ACBC),
+                                fontSize = 11.sp,
+                                maxLines = 4,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TextButton(onClick = ::loadSharedIntoLive) {
+                                    Text("LOAD IN LIVE", color = Color(0xFFF1D99B), fontWeight = FontWeight.Bold)
+                                }
+                                TextButton(onClick = { incomingShare.value = null }) {
+                                    Text("DISMISS", color = Color(0xFFB9ACBC))
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        incomingShare.value = extractAkujiIncomingShare(applicationContext, intent)
     }
 }
