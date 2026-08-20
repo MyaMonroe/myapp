@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
             val scope = rememberCoroutineScope()
-            val liveVoice = remember { AkujiLiveVoice() }
+            val liveVoice = remember { AkujiLiveVoice(this@MainActivity.applicationContext) }
             var showSkills by rememberSaveable { mutableStateOf(false) }
             var liveActive by remember { mutableStateOf(false) }
             var liveStatus by remember { mutableStateOf("LIVE OFF") }
@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
             fun beginLiveVoice() {
                 if (liveActive) return
                 liveStatus = "CONNECTING LIVE VOICE"
-                liveCaption = "Waiting for the microphone conversation to become active..."
+                liveCaption = "Loading AKUJI skills and waiting for the microphone conversation to become active..."
                 scope.launch {
                     runCatching {
                         liveVoice.start(
@@ -71,7 +71,9 @@ class MainActivity : ComponentActivity() {
                     }.onSuccess {
                         liveActive = true
                         liveStatus = "LIVE LISTENING"
-                        liveCaption = "Mic is active. Speak to AKUJI normally."
+                        val count = liveVoice.bundledSkillCount
+                        liveCaption = "Mic is active. $count bundled AKUJI skill" +
+                            if (count == 1) " is active." else "s are active."
                     }.onFailure { error ->
                         liveActive = false
                         liveStatus = "LIVE ERROR"
