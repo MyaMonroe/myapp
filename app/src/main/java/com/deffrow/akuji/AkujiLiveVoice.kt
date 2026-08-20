@@ -83,7 +83,7 @@ class AkujiLiveVoice(
                     onOutputTranscript(text)
                 }
             },
-            enableInterruptions = true,
+            enableInterruptions = false,
         )
 
         delay(350)
