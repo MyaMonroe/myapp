@@ -1,0 +1,34 @@
+# AKUJI Hermes runtime configuration.
+# Secrets stay in process environment / .env on the host, never in this file.
+
+# Leave the main model unset until a provider is authenticated on the host.
+model: ""
+
+# Unattended-agent circuit breaker. Stop repeated failing/no-progress tool loops.
+tool_loop_guardrails:
+  hard_stop_enabled: true
+  hard_stop_after:
+    exact_failure: 3
+    idempotent_no_progress: 3
+
+# Keep autonomous continuation bounded while AKUJI is being validated.
+goals:
+  max_turns: 8
+
+mcp_servers:
+  picsart:
+    url: "https://mcp.picsart.io/v1"
+    headers:
+      X-Picsart-API-Key: ${PICSART_API_KEY}
+    timeout: 120
+    connect_timeout: 30
+    sampling:
+      enabled: false
+    tools:
+      include:
+        - image-remove-background
+        - image-upscale
+        - genai-text2image
+
+# Start with a tiny Picsart allowlist. Add paid video/GenAI tools only after
+# AKUJI can check balance/cost and explicit credit limits are enforced.
