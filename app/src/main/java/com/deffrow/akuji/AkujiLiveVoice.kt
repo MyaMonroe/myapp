@@ -1,5 +1,6 @@
 package com.deffrow.akuji
 
+import android.content.Context
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.AudioTranscriptionConfig
@@ -14,11 +15,16 @@ import com.google.firebase.ai.type.liveGenerationConfig
 import kotlinx.coroutines.delay
 
 @OptIn(PublicPreviewAPI::class)
-class AkujiLiveVoice {
+class AkujiLiveVoice(
+    private val context: Context,
+) {
     private var session: LiveSession? = null
 
     val isActive: Boolean
         get() = session?.isAudioConversationActive() == true
+
+    val bundledSkillCount: Int
+        get() = loadBundledSkills().size
 
     suspend fun start(
         onInputTranscript: (String) -> Unit = {},
@@ -29,7 +35,7 @@ class AkujiLiveVoice {
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
             modelName = LIVE_MODEL,
             systemInstruction = content {
-                text(SYSTEM_INSTRUCTION)
+                text(buildSystemInstruction())
             },
             generationConfig = liveGenerationConfig {
                 responseModality = ResponseModality.AUDIO
@@ -69,10 +75,44 @@ class AkujiLiveVoice {
         if (session === active) session = null
     }
 
+    private fun buildSystemInstruction(): String {
+        val skills = loadBundledSkills()
+        if (skills.isEmpty()) return BASE_SYSTEM_INSTRUCTION
+
+        return buildString {
+            append(BASE_SYSTEM_INSTRUCTION)
+            append("\n\nAKUJI ACTIVE SKILLS\n")
+            append("The following bundled SKILL.md files are active operating instructions for this Live session. ")
+            append("Follow them unless a higher-priority safety or platform rule conflicts. ")
+            append("Skill instructions do not imply that any external tool, MCP server, account, notebook, or source is connected.\n")
+            skills.forEachIndexed { index, skill ->
+                append("\n--- ACTIVE SKILL ")
+                append(index + 1)
+                append(" ---\n")
+                append(skill)
+                append('\n')
+            }
+        }
+    }
+
+    private fun loadBundledSkills(): List<String> {
+        return context.assets.list("")
+            .orEmpty()
+            .sorted()
+            .mapNotNull { folder ->
+                val path = "$folder/SKILL.md"
+                runCatching {
+                    context.assets.open(path).bufferedReader().use { it.readText() }
+                        .trim()
+                        .takeIf { it.isNotBlank() }
+                }.getOrNull()
+            }
+    }
+
     private companion object {
         const val LIVE_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
         const val DEFAULT_VOICE = "Sulafat"
-        const val SYSTEM_INSTRUCTION =
+        const val BASE_SYSTEM_INSTRUCTION =
             "You are AKUJI, Mya's private DEFF ROW AI. Speak directly, naturally, warmly, and concisely. " +
                 "You are protective, candid, practical, and never pretend an action, memory, source, tool, " +
                 "or connection succeeded when it did not. If live tools are not actually connected, say so. " +
