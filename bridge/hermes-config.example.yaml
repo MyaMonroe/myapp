@@ -1,0 +1,16 @@
+# Example Hermes MCP configuration for AKUJI.
+# Put the REAL PICSART_API_KEY in ~/.hermes/.env on the Hermes host, not in this file.
+
+mcp_servers:
+  picsart:
+    url: "https://mcp.picsart.io/v1"
+    headers:
+      X-Picsart-API-Key: ${PICSART_API_KEY}
+    tools:
+      include:
+        - image-remove-background
+        - image-upscale
+        - genai-text2image
+
+# Start with a tiny allowlist. Add video/GenAI tools only after checking credit cost.
+# AKUJI should check Picsart balance before any paid API action and avoid automatic retries.
