@@ -11,6 +11,7 @@ import com.google.firebase.ai.type.SpeechConfig
 import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.liveGenerationConfig
+import kotlinx.coroutines.delay
 
 @OptIn(PublicPreviewAPI::class)
 class AkujiLiveVoice {
@@ -48,6 +49,13 @@ class AkujiLiveVoice {
             },
             enableInterruptions = false,
         )
+
+        delay(350)
+        if (!liveSession.isAudioConversationActive()) {
+            runCatching { liveSession.close() }
+            if (session === liveSession) session = null
+            error("Live session opened, but the microphone conversation did not become active.")
+        }
     }
 
     fun stop() {
