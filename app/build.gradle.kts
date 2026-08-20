@@ -75,7 +75,7 @@ dependencies {
 
     implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
     implementation("com.google.firebase:firebase-ai")
-    implementation("com.google.firebase:firebase-appcheck-debug")
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
 
     val composeBom = platform("androidx.compose:compose-bom:2025.10.01")
     implementation(composeBom)
