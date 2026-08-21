@@ -3,6 +3,7 @@ package com.deffrow.akuji
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -11,12 +12,15 @@ import java.net.URL
 class AkujiBridgeClient(context: Context) {
     data class BridgeStatus(
         val authenticated: Boolean,
-        val harnessConfigured: Boolean,
+        val operatorMode: String,
         val executionEnabled: Boolean,
+        val availableTools: List<String>,
     )
 
-    data class HarnessResult(
+    data class OperatorResult(
         val ok: Boolean,
+        val executed: Boolean,
+        val tool: String,
         val statusCode: Int?,
         val result: String?,
         val message: String?,
@@ -35,39 +39,43 @@ class AkujiBridgeClient(context: Context) {
             val json = JSONObject(response.body)
             BridgeStatus(
                 authenticated = json.optBoolean("authenticated", false),
-                harnessConfigured = json.optBoolean("harness_configured", false),
+                operatorMode = json.optString("operator_mode", "unknown"),
                 executionEnabled = json.optBoolean("execution_enabled", false),
+                availableTools = json.optJSONArray("available_tools").toStringList(),
             )
         }
     }
 
-    suspend fun runHarnessTask(
-        instruction: String,
-        context: String? = null,
+    suspend fun runOperatorTool(
+        tool: String,
+        argumentsJson: String = "{}",
         dryRun: Boolean = true,
-    ): Result<HarnessResult> = withContext(Dispatchers.IO) {
+    ): Result<OperatorResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val cleanInstruction = instruction.trim()
-            require(cleanInstruction.isNotBlank()) { "Harness instruction cannot be empty." }
-            require(cleanInstruction.length <= 12_000) { "Harness instruction is too long." }
-            require(context == null || context.length <= 24_000) { "Harness context is too long." }
+            val cleanTool = tool.trim().lowercase()
+            require(cleanTool.isNotBlank()) { "Operator tool cannot be empty." }
+            require(cleanTool.length <= 120) { "Operator tool name is too long." }
 
+            val arguments = argumentsJson.trim().ifBlank { "{}" }
+            val argumentsObject = JSONObject(arguments)
             val config = requireConfig()
             val payload = JSONObject()
-                .put("instruction", cleanInstruction)
-                .put("context", context ?: JSONObject.NULL)
+                .put("tool", cleanTool)
+                .put("arguments", argumentsObject)
                 .put("dry_run", dryRun)
 
             val response = request(
                 method = "POST",
-                url = "${config.baseUrl}/v1/harness/task",
+                url = "${config.baseUrl}/v1/operator/tool",
                 bearerToken = config.bearerToken,
                 jsonBody = payload.toString(),
             )
 
             val json = JSONObject(response.body)
-            HarnessResult(
+            OperatorResult(
                 ok = json.optBoolean("ok", false),
+                executed = json.optBoolean("executed", false),
+                tool = json.optString("tool", cleanTool),
                 statusCode = if (json.isNull("status_code")) null else json.optInt("status_code"),
                 result = json.opt("result")?.let { value ->
                     if (value == JSONObject.NULL) null else value.toString()
@@ -134,6 +142,15 @@ class AkujiBridgeClient(context: Context) {
         }
     }
 
+    private fun JSONArray?.toStringList(): List<String> {
+        if (this == null) return emptyList()
+        return buildList {
+            for (index in 0 until length()) {
+                optString(index).takeIf { it.isNotBlank() }?.let(::add)
+            }
+        }
+    }
+
     private data class HttpResponse(
         val statusCode: Int,
         val body: String,
@@ -141,6 +158,6 @@ class AkujiBridgeClient(context: Context) {
 
     private companion object {
         const val CONNECT_TIMEOUT_MS = 10_000
-        const val READ_TIMEOUT_MS = 60_000
+        const val READ_TIMEOUT_MS = 120_000
     }
 }
