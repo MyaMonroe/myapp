@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 from typing import Any
@@ -16,8 +17,10 @@ HARNESS_BASE_URL = os.getenv("AKUJI_HARNESS_BASE_URL", "").strip().rstrip("/")
 HARNESS_TASK_PATH = os.getenv("AKUJI_HARNESS_TASK_PATH", "").strip()
 HARNESS_TOKEN = os.getenv("AKUJI_HARNESS_TOKEN", "").strip()
 ALLOW_EXECUTION = os.getenv("AKUJI_BRIDGE_ALLOW_EXECUTION", "false").strip().lower() == "true"
+HERMES_WAIT_SECONDS = 50.0
+HERMES_POLL_SECONDS = 0.75
 
-app = FastAPI(title=APP_NAME, version="0.2.0", docs_url=None, redoc_url=None)
+app = FastAPI(title=APP_NAME, version="0.3.0", docs_url=None, redoc_url=None)
 
 
 class BridgeStatus(BaseModel):
@@ -92,6 +95,112 @@ async def relay_json(method: str, target: str, *, payload: dict[str, Any] | None
     )
 
 
+async def run_hermes_and_wait(payload: dict[str, Any]) -> HarnessResult:
+    """Start a Hermes run and return its final output when it finishes quickly.
+
+    Hermes POST /v1/runs is intentionally asynchronous. AKUJI Live needs a single
+    function response, so the bridge polls the run for a bounded period. Long runs
+    are returned with their run_id so they can still be inspected or stopped.
+    """
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
+            start = await client.post(
+                f"{HARNESS_BASE_URL}/v1/runs",
+                json=payload,
+                headers=harness_headers(),
+            )
+            start_payload = start.json() if "application/json" in start.headers.get("content-type", "").lower() else {}
+            if not start.is_success:
+                return HarnessResult(
+                    ok=False,
+                    status_code=start.status_code,
+                    result=start_payload or start.text[:20000],
+                    message="Hermes could not start the operator run.",
+                )
+
+            run_id = str(start_payload.get("run_id") or "").strip()
+            if not run_id:
+                return HarnessResult(
+                    ok=False,
+                    status_code=start.status_code,
+                    result=start_payload,
+                    message="Hermes started without returning a run_id.",
+                )
+
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + HERMES_WAIT_SECONDS
+            latest: dict[str, Any] = {"run_id": run_id, "status": "started"}
+
+            while loop.time() < deadline:
+                await asyncio.sleep(HERMES_POLL_SECONDS)
+                poll = await client.get(
+                    f"{HARNESS_BASE_URL}/v1/runs/{run_id}",
+                    headers=harness_headers(),
+                )
+                if not poll.is_success:
+                    return HarnessResult(
+                        ok=False,
+                        status_code=poll.status_code,
+                        result={"run_id": run_id},
+                        message="Hermes started the run, but AKUJI could not read its status.",
+                    )
+
+                latest = poll.json()
+                run_status = str(latest.get("status") or "").strip().lower()
+
+                if run_status == "completed":
+                    output = latest.get("output")
+                    if output is None or (isinstance(output, str) and not output.strip()):
+                        return HarnessResult(
+                            ok=False,
+                            status_code=poll.status_code,
+                            result={"run_id": run_id, "status": run_status, "details": latest},
+                            message=(
+                                "Hermes finished without an output. The operator model/provider may not be authenticated yet."
+                            ),
+                        )
+                    return HarnessResult(
+                        ok=True,
+                        status_code=poll.status_code,
+                        result={"run_id": run_id, "status": run_status, "output": output},
+                    )
+
+                if run_status in {"failed", "cancelled", "canceled"}:
+                    return HarnessResult(
+                        ok=False,
+                        status_code=poll.status_code,
+                        result=latest,
+                        message=f"Hermes operator run {run_status}.",
+                    )
+
+                if run_status in {
+                    "pending_approval",
+                    "awaiting_approval",
+                    "requires_approval",
+                    "requires_action",
+                }:
+                    return HarnessResult(
+                        ok=False,
+                        status_code=poll.status_code,
+                        result=latest,
+                        message="Hermes is waiting for approval before it can continue this operator run.",
+                    )
+
+            return HarnessResult(
+                ok=True,
+                status_code=202,
+                result={
+                    "run_id": run_id,
+                    "status": str(latest.get("status") or "running"),
+                    "message": "The Hermes run is still working in the background.",
+                },
+                message="The operator run is still working; use the run id to check it later.",
+            )
+    except (httpx.HTTPError, ValueError) as exc:
+        return HarnessResult(ok=False, message=f"Hermes connection failed: {exc.__class__.__name__}")
+
+
 def execution_guard(dry_run: bool) -> None:
     if not dry_run and not ALLOW_EXECUTION:
         raise HTTPException(
@@ -144,7 +253,7 @@ async def run_harness_task(task: HarnessTask) -> HarnessResult:
         if task.session_id:
             payload["session_id"] = task.session_id
 
-        return await relay_json("POST", f"{HARNESS_BASE_URL}/v1/runs", payload=payload)
+        return await run_hermes_and_wait(payload)
 
     target = f"{HARNESS_BASE_URL}/{HARNESS_TASK_PATH.lstrip('/')}"
     payload = {
