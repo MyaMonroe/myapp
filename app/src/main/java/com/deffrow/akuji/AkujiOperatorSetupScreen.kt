@@ -45,29 +45,26 @@ fun AkujiOperatorSetupScreen(onBack: () -> Unit) {
     var status by remember {
         mutableStateOf(
             if (bridge.isConfigured()) {
-                "Operator credentials are stored securely on this phone. You can replace them or test the connection."
+                "Direct operator credentials are stored securely on this phone."
             } else {
-                "Paste the HTTPS bridge address and bridge token from your AKUJI server. The token stays encrypted in Android Keystore."
+                "Paste the HTTPS AKUJI bridge address and bridge token. The token stays encrypted in Android Keystore."
             },
         )
     }
     var busy by remember { mutableStateOf(false) }
 
+    fun statusText(result: AkujiBridgeClient.BridgeStatus): String {
+        val tools = if (result.availableTools.isEmpty()) "no private tools connected" else result.availableTools.joinToString(", ")
+        return "OPERATOR CONNECTED · ${result.operatorMode.uppercase()} · $tools · execution ${if (result.executionEnabled) "ON" else "OFF"}"
+    }
+
     fun testStoredConnection() {
         busy = true
-        status = "Checking AKUJI operator..."
+        status = "Checking AKUJI direct operator..."
         scope.launch {
             bridge.getStatus()
-                .onSuccess { result ->
-                    status = if (result.authenticated && result.harnessConfigured) {
-                        "OPERATOR CONNECTED · execution ${if (result.executionEnabled) "ON" else "OFF"}"
-                    } else {
-                        "Bridge answered, but the Hermes harness is not fully configured yet."
-                    }
-                }
-                .onFailure { error ->
-                    status = error.message ?: "AKUJI could not reach the operator bridge."
-                }
+                .onSuccess { result -> status = statusText(result) }
+                .onFailure { error -> status = error.message ?: "AKUJI could not reach the operator bridge." }
             busy = false
         }
     }
@@ -123,26 +120,19 @@ fun AkujiOperatorSetupScreen(onBack: () -> Unit) {
                 Button(
                     onClick = {
                         busy = true
-                        status = "Saving and testing operator connection..."
+                        status = "Saving and testing direct operator connection..."
                         scope.launch {
-                            runCatching {
-                                bridge.saveConfiguration(endpoint, token)
-                            }.onFailure { error ->
-                                status = error.message ?: "AKUJI could not save the operator connection."
-                                busy = false
-                                return@launch
-                            }
+                            runCatching { bridge.saveConfiguration(endpoint, token) }
+                                .onFailure { error ->
+                                    status = error.message ?: "AKUJI could not save the operator connection."
+                                    busy = false
+                                    return@launch
+                                }
 
                             endpoint = ""
                             token = ""
                             bridge.getStatus()
-                                .onSuccess { result ->
-                                    status = if (result.authenticated && result.harnessConfigured) {
-                                        "OPERATOR CONNECTED · execution ${if (result.executionEnabled) "ON" else "OFF"}"
-                                    } else {
-                                        "Bridge answered, but the Hermes harness is not fully configured yet."
-                                    }
-                                }
+                                .onSuccess { result -> status = statusText(result) }
                                 .onFailure { error ->
                                     status = error.message ?: "Saved securely, but AKUJI could not reach the operator bridge."
                                 }
