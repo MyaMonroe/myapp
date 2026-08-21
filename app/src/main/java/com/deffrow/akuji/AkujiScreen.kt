@@ -1,15 +1,10 @@
 package com.deffrow.akuji
 
-import android.Manifest
-import android.app.Activity
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -36,11 +31,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -59,215 +52,86 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class AkujiState(val label: String) {
-    Awake("AWAKE"),
+internal enum class AkujiPresenceState(val label: String) {
+    Ready("READY"),
+    Connecting("CONNECTING"),
     Listening("LISTENING"),
-    Thinking("THINKING"),
     Speaking("SPEAKING"),
-    Importing("COPYING MODEL"),
-    Downloading("DOWNLOADING GEMMA"),
-    Loading("LOADING MODEL"),
     CoreImporting("IMPORTING CORE"),
-    ModelReady("LOCAL MODEL READY"),
-    BrainError("MODEL ERROR"),
+    Error("ERROR"),
     MicrophoneBlocked("MICROPHONE BLOCKED"),
-    VoiceUnavailable("VOICE UNAVAILABLE"),
 }
 
 @Composable
-fun AkujiApp() {
+fun AkujiApp(
+    state: AkujiPresenceState,
+    caption: String,
+    speechPulse: Int,
+    liveActive: Boolean,
+    onTalk: () -> Unit,
+    onSkills: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val memory = remember { AkujiMemoryStore(context) }
     val core = remember { AkujiCoreStore(context) }
-    val brain = remember { AkujiLocalModelBrain(context, memory, core) }
-    val voice = remember { AkujiVoice(context) }
-
-    var state by remember { mutableStateOf(AkujiState.Awake) }
-    var speechPulse by remember { mutableIntStateOf(0) }
-    var caption by remember {
-        mutableStateOf(
-            if (brain.hasModel) "AKUJI's local model is connected."
-            else "AKUJI is ready to install Gemma 4 E2B directly on this phone.",
-        )
-    }
-
-    DisposableEffect(voice, brain) {
-        onDispose {
-            voice.shutdown()
-            brain.close()
-        }
-    }
-
-    suspend fun finishGemmaInstall() {
-        state = AkujiState.Downloading
-        caption = "Installing Gemma 4 E2B on Wi-Fi... 0%"
-        val download = brain.downloadRecommendedModel { progress ->
-            caption = "Installing Gemma 4 E2B on Wi-Fi... $progress%"
-        }
-        if (download.isFailure) {
-            caption = download.exceptionOrNull()?.message ?: "AKUJI could not install Gemma."
-            state = AkujiState.BrainError
-            return
-        }
-
-        state = AkujiState.Loading
-        caption = "Loading Gemma inside AKUJI..."
-        brain.prepare()
-            .onSuccess {
-                caption = "Gemma 4 E2B is connected to AKUJI's body, voice, and memory."
-                state = AkujiState.ModelReady
-            }
-            .onFailure {
-                caption = it.message ?: "Gemma could not start on this phone."
-                state = AkujiState.BrainError
-            }
-    }
-
-    LaunchedEffect(brain) {
-        if (brain.hasModel) {
-            state = AkujiState.Loading
-            brain.prepare()
-                .onSuccess { state = AkujiState.ModelReady }
-                .onFailure {
-                    caption = it.message ?: "The local model could not start."
-                    state = AkujiState.BrainError
-                }
-        } else if (brain.hasPendingDownload) {
-            finishGemmaInstall()
-        }
-    }
-
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        val spoken = result.data
-            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            ?.firstOrNull()
-
-        if (result.resultCode != Activity.RESULT_OK || spoken.isNullOrBlank()) {
-            state = AkujiState.Awake
-            return@rememberLauncherForActivityResult
-        }
-
-        scope.launch {
-            state = AkujiState.Thinking
-            runCatching { brain.respond(spoken) }
-                .onSuccess { reply ->
-                    caption = reply.text
-                    if (!reply.shouldSpeak) {
-                        state = AkujiState.Awake
-                        return@onSuccess
-                    }
-                    voice.speak(
-                        text = reply.text,
-                        onStart = {
-                            state = AkujiState.Speaking
-                            speechPulse += 1
-                        },
-                        onSpeechPulse = { speechPulse += 1 },
-                        onDone = {
-                            state = if (brain.hasModel) AkujiState.ModelReady else AkujiState.Awake
-                        },
-                        onError = { state = AkujiState.VoiceUnavailable },
-                    )
-                }
-                .onFailure {
-                    caption = it.message ?: "The local brain could not answer."
-                    state = AkujiState.BrainError
-                }
-        }
-    }
-
-    fun startListening() {
-        voice.stop()
-        state = AkujiState.Listening
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-            )
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to AKUJI")
-        }
-        speechLauncher.launch(intent)
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted) startListening() else state = AkujiState.MicrophoneBlocked
-    }
-
-    fun requestConversation() {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO,
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (granted) startListening()
-        else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-    }
+    var coreState by remember { mutableStateOf(core.hasCore) }
+    var localStatus by remember { mutableStateOf<String?>(null) }
+    var importingCore by remember { mutableStateOf(false) }
 
     val coreImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         scope.launch {
-            state = AkujiState.CoreImporting
-            caption = "Copying AKUJI's core into private on-device storage..."
+            importingCore = true
+            localStatus = "Copying AKUJI's core into private on-device storage..."
             val imported = withContext(Dispatchers.IO) { core.import(uris) }
             imported
                 .onSuccess { result ->
-                    brain.reloadCore()
-                        .onSuccess {
-                            caption = "AKUJI's permanent core is active. ${result.fileCount} file" +
-                                if (result.fileCount == 1) " was imported." else "s were imported."
-                            state = if (brain.hasModel) AkujiState.ModelReady else AkujiState.Awake
-                        }
-                        .onFailure {
-                            caption = it.message ?: "The core was saved, but the model could not reload."
-                            state = AkujiState.BrainError
-                        }
+                    coreState = true
+                    localStatus = "AKUJI core updated: ${result.fileCount} file" +
+                        if (result.fileCount == 1) "." else "s."
                 }
-                .onFailure {
-                    caption = it.message ?: "AKUJI could not import that core."
-                    state = AkujiState.BrainError
+                .onFailure { error ->
+                    localStatus = error.message ?: "AKUJI could not import that core."
                 }
+            importingCore = false
         }
     }
 
-    fun importCore() {
-        coreImportLauncher.launch(
-            arrayOf(
-                "text/plain",
-                "application/json",
-                "text/markdown",
-                "application/javascript",
-                "text/html",
-                "application/xml",
-                "application/zip",
-            ),
-        )
-    }
+    val effectiveState = if (importingCore) AkujiPresenceState.CoreImporting else state
+    val effectiveCaption = localStatus ?: caption
 
     MaterialTheme {
         Surface(color = Color.Black, modifier = Modifier.fillMaxSize()) {
             AkujiBody(
-                state = state,
-                caption = caption,
+                state = effectiveState,
+                caption = effectiveCaption,
                 speechPulse = speechPulse,
-                onTalk = ::requestConversation,
-                hasModel = brain.hasModel,
-                hasCore = core.hasCore,
-                onInstallGemma = { scope.launch { finishGemmaInstall() } },
-                onImportCore = ::importCore,
+                liveActive = liveActive,
+                hasCore = coreState,
+                onTalk = {
+                    localStatus = null
+                    onTalk()
+                },
+                onSkills = onSkills,
+                onImportCore = {
+                    coreImportLauncher.launch(
+                        arrayOf(
+                            "text/plain",
+                            "application/json",
+                            "text/markdown",
+                            "application/javascript",
+                            "text/html",
+                            "application/xml",
+                            "application/zip",
+                        ),
+                    )
+                },
             )
         }
     }
@@ -275,13 +139,13 @@ fun AkujiApp() {
 
 @Composable
 private fun AkujiBody(
-    state: AkujiState,
+    state: AkujiPresenceState,
     caption: String,
     speechPulse: Int,
-    onTalk: () -> Unit,
-    hasModel: Boolean,
+    liveActive: Boolean,
     hasCore: Boolean,
-    onInstallGemma: () -> Unit,
+    onTalk: () -> Unit,
+    onSkills: () -> Unit,
     onImportCore: () -> Unit,
 ) {
     val voiceMotion = remember { Animatable(0f) }
@@ -290,10 +154,7 @@ private fun AkujiBody(
             voiceMotion.snapTo(1f)
             voiceMotion.animateTo(
                 targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = 180,
-                    easing = FastOutSlowInEasing,
-                ),
+                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
             )
         }
     }
@@ -301,28 +162,29 @@ private fun AkujiBody(
     val transition = rememberInfiniteTransition(label = "akuji-presence")
     val breath by transition.animateFloat(
         initialValue = 1f,
-        targetValue = if (state == AkujiState.Speaking) 1.028f else 1.012f,
+        targetValue = if (state == AkujiPresenceState.Speaking) 1.028f else 1.012f,
         animationSpec = infiniteRepeatable(
-            animation = tween(if (state == AkujiState.Speaking) 520 else 2_300),
+            animation = tween(if (state == AkujiPresenceState.Speaking) 520 else 2_300),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "breath",
     )
     val aura by transition.animateFloat(
         initialValue = 0.28f,
-        targetValue = if (state == AkujiState.Speaking) 0.9f else 0.5f,
+        targetValue = if (liveActive) 0.9f else 0.5f,
         animationSpec = infiniteRepeatable(
-            animation = tween(if (state == AkujiState.Speaking) 420 else 1_800),
+            animation = tween(if (liveActive) 420 else 1_800),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "aura",
     )
+
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF07050A))) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    val pulse = if (state == AkujiState.Speaking) voiceMotion.value else 0f
+                    val pulse = if (state == AkujiPresenceState.Speaking) voiceMotion.value else 0f
                     scaleX = breath + (pulse * 0.004f)
                     scaleY = breath + (pulse * 0.010f)
                     translationY = -(pulse * 7f)
@@ -336,7 +198,6 @@ private fun AkujiBody(
                 alignment = Alignment.TopCenter,
                 modifier = Modifier.fillMaxSize(),
             )
-
         }
 
         Box(
@@ -373,7 +234,7 @@ private fun AkujiBody(
                         letterSpacing = 5.sp,
                     )
                     Text(
-                        text = "DEFF ROW // LOCAL BODY",
+                        text = "DEFF ROW // LIVE BODY",
                         color = Color(0xFFCBA3C9),
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 10.sp,
@@ -399,7 +260,9 @@ private fun AkujiBody(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = caption,
+                    text = caption.ifBlank {
+                        if (liveActive) "AKUJI is listening." else "Tap TALK to speak to AKUJI."
+                    },
                     color = Color(0xFFF7EEDC),
                     fontSize = 16.sp,
                     lineHeight = 22.sp,
@@ -430,10 +293,8 @@ private fun AkujiBody(
                 ) {
                     Button(
                         onClick = onTalk,
-                        enabled = state != AkujiState.Listening &&
-                            state != AkujiState.Thinking &&
-                            state != AkujiState.Downloading &&
-                            state != AkujiState.Loading,
+                        enabled = state != AkujiPresenceState.Connecting &&
+                            state != AkujiPresenceState.CoreImporting,
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF241128),
@@ -445,7 +306,7 @@ private fun AkujiBody(
                             .border(2.dp, Color(0xFFC9A84C), CircleShape),
                     ) {
                         Text(
-                            text = if (state == AkujiState.Listening) "..." else "TALK",
+                            text = if (liveActive) "STOP" else "TALK",
                             fontWeight = FontWeight.Black,
                             fontSize = 12.sp,
                             letterSpacing = 1.sp,
@@ -453,46 +314,26 @@ private fun AkujiBody(
                     }
                 }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = if (hasCore) {
-                        "Voice + memory + AKUJI core stay on this phone"
+                        "Local memory + AKUJI core ready · Live voice uses Google"
                     } else {
-                        "Voice + memory stay on this phone"
+                        "Local memory ready · Live voice uses Google"
                     },
                     color = Color(0xFFAA9BAE),
                     fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
                 )
+
                 Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = onImportCore,
-                    enabled = state != AkujiState.CoreImporting &&
-                        state != AkujiState.Downloading &&
-                        state != AkujiState.Loading,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF120B16),
-                        contentColor = Color(0xFFF1D99B),
-                    ),
-                    modifier = Modifier.border(
-                        1.dp,
-                        Color(0x66C9A84C),
-                        RoundedCornerShape(100.dp),
-                    ),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 ) {
-                    Text(
-                        text = if (hasCore) "UPDATE AKUJI CORE" else "IMPORT AKUJI CORE",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        letterSpacing = 1.sp,
-                    )
-                }
-                if (!hasModel) {
-                    Spacer(Modifier.height(8.dp))
                     Button(
-                        onClick = onInstallGemma,
-                        enabled = state != AkujiState.Importing &&
-                            state != AkujiState.Downloading &&
-                            state != AkujiState.Loading,
+                        onClick = onImportCore,
+                        enabled = state != AkujiPresenceState.CoreImporting,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF120B16),
                             contentColor = Color(0xFFF1D99B),
@@ -504,10 +345,30 @@ private fun AkujiBody(
                         ),
                     ) {
                         Text(
-                            text = "INSTALL GEMMA 4 E2B · WI-FI",
+                            text = if (hasCore) "UPDATE CORE" else "IMPORT CORE",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            letterSpacing = 1.sp,
+                            fontSize = 10.sp,
+                            letterSpacing = 0.8.sp,
+                        )
+                    }
+
+                    Button(
+                        onClick = onSkills,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF120B16),
+                            contentColor = Color(0xFFF1D99B),
+                        ),
+                        modifier = Modifier.border(
+                            1.dp,
+                            Color(0x66C9A84C),
+                            RoundedCornerShape(100.dp),
+                        ),
+                    ) {
+                        Text(
+                            text = "SKILLS",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            letterSpacing = 0.8.sp,
                         )
                     }
                 }
