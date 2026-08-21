@@ -14,7 +14,7 @@ BRIDGE_TOKEN = os.getenv("AKUJI_BRIDGE_TOKEN", "").strip()
 PICSART_API_KEY = os.getenv("PICSART_API_KEY", "").strip()
 ALLOW_EXECUTION = os.getenv("AKUJI_BRIDGE_ALLOW_EXECUTION", "false").strip().lower() == "true"
 
-app = FastAPI(title=APP_NAME, version="1.0.0", docs_url=None, redoc_url=None)
+app = FastAPI(title=APP_NAME, version="1.1.0", docs_url=None, redoc_url=None)
 
 
 class BridgeStatus(BaseModel):
@@ -57,7 +57,7 @@ def require_bridge_auth(authorization: str | None = Header(default=None)) -> Non
 
 
 def available_tools() -> list[str]:
-    tools: list[str] = []
+    tools = ["bridge_echo"]
     if PICSART_API_KEY:
         tools.append("picsart_remove_background")
     return tools
@@ -153,7 +153,7 @@ async def run_operator_tool(request: OperatorToolRequest) -> OperatorToolResult:
     tool = request.tool.strip().lower()
     execution_guard(request.dry_run)
 
-    if tool not in {"picsart_remove_background"}:
+    if tool not in {"bridge_echo", "picsart_remove_background"}:
         raise HTTPException(status_code=404, detail=f"Unknown AKUJI operator tool: {tool}")
 
     if tool == "picsart_remove_background" and not PICSART_API_KEY:
@@ -167,9 +167,18 @@ async def run_operator_tool(request: OperatorToolRequest) -> OperatorToolResult:
             result={
                 "arguments": request.arguments,
                 "execution_enabled": ALLOW_EXECUTION,
-                "note": "Dry-run only. No provider call was made and no Picsart credit was used.",
+                "note": "Dry-run only. No external provider call was made and no external state changed.",
             },
             message="AKUJI validated the tool request without executing it.",
+        )
+
+    if tool == "bridge_echo":
+        return OperatorToolResult(
+            ok=True,
+            executed=True,
+            tool=tool,
+            result={"echo": request.arguments},
+            message="AKUJI bridge echo completed locally.",
         )
 
     if tool == "picsart_remove_background":
