@@ -56,7 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-internal enum class AkujiPresenceState(val label: String) {
+enum class AkujiPresenceState(val label: String) {
     Ready("READY"),
     Connecting("CONNECTING"),
     Listening("LISTENING"),
