@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
             val sharedItem = incomingShare.value
 
             var showSkills by rememberSaveable { mutableStateOf(false) }
+            var showOperator by rememberSaveable { mutableStateOf(false) }
             var liveActive by remember { mutableStateOf(false) }
             var presence by remember { mutableStateOf(AkujiPresenceState.Ready) }
             var liveCaption by remember { mutableStateOf("Tap TALK to speak to AKUJI.") }
@@ -97,11 +98,12 @@ class MainActivity : ComponentActivity() {
                         liveActive = true
                         presence = AkujiPresenceState.Listening
                         val count = liveVoice.bundledSkillCount
+                        val operator = if (liveVoice.operatorConfigured) " · operator configured" else ""
                         liveCaption = if (sessionContext.isNullOrBlank()) {
                             "AKUJI is listening. $count bundled skill" +
-                                if (count == 1) " is loaded." else "s are loaded."
+                                if (count == 1) " is loaded$operator." else "s are loaded$operator."
                         } else {
-                            "AKUJI is listening with your shared item and $count bundled skills loaded."
+                            "AKUJI is listening with your shared item, $count bundled skills$operator."
                         }
                     }.onFailure { error ->
                         liveActive = false
@@ -161,66 +163,92 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            if (showSkills) {
-                AkujiSkillsScreen(onBack = { showSkills = false })
-            } else {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    AkujiApp(
-                        state = presence,
-                        caption = liveCaption,
-                        speechPulse = speechPulse,
-                        liveActive = liveActive,
-                        onTalk = ::toggleLiveVoice,
-                        onSkills = { showSkills = true },
-                    )
+            when {
+                showOperator -> AkujiOperatorSetupScreen(onBack = { showOperator = false })
+                showSkills -> AkujiSkillsScreen(onBack = { showSkills = false })
+                else -> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AkujiApp(
+                            state = presence,
+                            caption = liveCaption,
+                            speechPulse = speechPulse,
+                            liveActive = liveActive,
+                            onTalk = ::toggleLiveVoice,
+                            onSkills = { showSkills = true },
+                        )
 
-                    sharedItem?.let { item ->
-                        Column(
+                        TextButton(
+                            onClick = {
+                                if (liveActive || liveVoice.isActive) {
+                                    liveVoice.stop()
+                                    liveActive = false
+                                    presence = AkujiPresenceState.Ready
+                                }
+                                showOperator = true
+                            },
                             modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(start = 18.dp, end = 18.dp, bottom = 24.dp)
-                                .fillMaxWidth()
-                                .background(Color(0xEE120B16), RoundedCornerShape(20.dp))
-                                .border(1.dp, Color(0x88C9A84C), RoundedCornerShape(20.dp))
-                                .padding(14.dp),
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 10.dp)
+                                .background(Color(0xCC120B16), RoundedCornerShape(100.dp))
+                                .border(1.dp, Color(0x88C9A84C), RoundedCornerShape(100.dp)),
                         ) {
                             Text(
-                                text = "SHARED TO AKUJI",
+                                text = "OPERATOR",
                                 color = Color(0xFFF1D99B),
                                 fontWeight = FontWeight.Black,
-                                fontSize = 10.sp,
-                                letterSpacing = 1.1.sp,
+                                fontSize = 9.sp,
+                                letterSpacing = 0.8.sp,
                             )
-                            Text(
-                                text = item.title,
-                                color = Color(0xFFF7EEDC),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(top = 5.dp),
-                            )
-                            Text(
-                                text = item.summary,
-                                color = Color(0xFFB9ACBC),
-                                fontSize = 11.sp,
-                                maxLines = 4,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                            Row(
+                        }
+
+                        sharedItem?.let { item ->
+                            Column(
                                 modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(start = 18.dp, end = 18.dp, bottom = 24.dp)
                                     .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
+                                    .background(Color(0xEE120B16), RoundedCornerShape(20.dp))
+                                    .border(1.dp, Color(0x88C9A84C), RoundedCornerShape(20.dp))
+                                    .padding(14.dp),
                             ) {
-                                TextButton(onClick = ::loadSharedIntoLive) {
-                                    Text(
-                                        "LOAD IN AKUJI",
-                                        color = Color(0xFFF1D99B),
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                                TextButton(onClick = { incomingShare.value = null }) {
-                                    Text("DISMISS", color = Color(0xFFB9ACBC))
+                                Text(
+                                    text = "SHARED TO AKUJI",
+                                    color = Color(0xFFF1D99B),
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 10.sp,
+                                    letterSpacing = 1.1.sp,
+                                )
+                                Text(
+                                    text = item.title,
+                                    color = Color(0xFFF7EEDC),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(top = 5.dp),
+                                )
+                                Text(
+                                    text = item.summary,
+                                    color = Color(0xFFB9ACBC),
+                                    fontSize = 11.sp,
+                                    maxLines = 4,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    TextButton(onClick = ::loadSharedIntoLive) {
+                                        Text(
+                                            "LOAD IN AKUJI",
+                                            color = Color(0xFFF1D99B),
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                    TextButton(onClick = { incomingShare.value = null }) {
+                                        Text("DISMISS", color = Color(0xFFB9ACBC))
+                                    }
                                 }
                             }
                         }
