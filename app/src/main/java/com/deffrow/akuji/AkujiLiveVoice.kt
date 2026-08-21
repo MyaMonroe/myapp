@@ -17,6 +17,7 @@ import com.google.firebase.ai.type.Tool
 import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.liveGenerationConfig
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
@@ -130,7 +131,7 @@ class AkujiLiveVoice(
                 append("\n\nAKUJI ACTIVE SKILLS\n")
                 append("The following bundled SKILL.md files are active operating instructions for this Live session. ")
                 append("Follow them unless a higher-priority safety or platform rule conflicts. ")
-                append("Skill instructions do not imply that any external account, MCP server, notebook, or private source is connected.\n")
+                append("Skill instructions do not imply that any external account or private source is connected.\n")
                 skills.forEachIndexed { index, skill ->
                     append("\n--- ACTIVE SKILL ")
                     append(index + 1)
@@ -141,17 +142,16 @@ class AkujiLiveVoice(
             }
 
             append("\n\nLIVE TOOL RULES\n")
-            append("You have a Google Search tool for current public web information. Use it when the answer depends on current internet information instead of asking Mya for screenshots. ")
-            append("Google Search does not grant access to Mya's private accounts or logged-in pages. ")
-            append("You also have local focus and memory functions. Use them autonomously from natural conversation: keep one active task, save meaningful checkpoints, park side ideas instead of following them, and retrieve parked work when the active lane finishes or Mya asks what is next. ")
-            append("When Mya says or clearly means 'remember this', use remember_fact. Do not require tool names or prompt-engineering language from her. ")
+            append("Google Live is AKUJI's conversation/reasoning layer. You also have Google Search for current public web information and local focus/memory functions. ")
+            append("Use those autonomously from natural conversation. When Mya clearly means 'remember this', use remember_fact. ")
+            append("Do not require tool names or prompt-engineering language from her. ")
 
             if (bridge.isConfigured()) {
-                append("The AKUJI operator bridge is configured on this phone. Use operator_status to verify it when needed. ")
-                append("Use operator_dry_run when a task needs the private Hermes operator to inspect, research, reason, or prepare work. ")
-                append("operator_dry_run is deliberately non-state-changing; never claim that an external action was completed from a dry run.")
+                append("The AKUJI direct operator bridge is configured on this phone. It is a tool gateway, not a second AI model and it does not require Hermes, MiniMax, Qwen, or another model provider. ")
+                append("Use operator_status to discover which private tools are actually available. Use operator_tool_dry_run to validate a private tool request without spending credits or changing external state. ")
+                append("Never claim a dry run executed anything.")
             } else {
-                append("The AKUJI operator bridge is not configured on this phone yet. Do not claim Hermes or private operator access is active.")
+                append("The AKUJI direct operator bridge is not configured on this phone yet. Do not claim private operator access is active.")
             }
 
             sessionContext?.trim()?.takeIf { it.isNotBlank() }?.let { shared ->
@@ -181,9 +181,9 @@ class AkujiLiveVoice(
                 "complete_active_task" -> memory.completeActiveTask(call.stringArg("summary"))
                 "remember_fact" -> call.stringArg("text").also(memory::remember)
                 "operator_status" -> operatorStatus()
-                "operator_dry_run" -> operatorDryRun(
-                    instruction = call.stringArg("instruction"),
-                    taskContext = call.stringArg("context").takeIf { it.isNotBlank() },
+                "operator_tool_dry_run" -> operatorToolDryRun(
+                    tool = call.stringArg("tool"),
+                    argumentsJson = call.stringArg("arguments_json").ifBlank { "{}" },
                 )
                 else -> {
                     ok = false
@@ -208,29 +208,31 @@ class AkujiLiveVoice(
 
     private fun operatorStatus(): String {
         if (!bridge.isConfigured()) {
-            return "AKUJI operator bridge is not configured on this phone."
+            return "AKUJI direct operator bridge is not configured on this phone."
         }
 
-        val status = runBlocking { bridge.getStatus().getOrThrow() }
+        val status = runBlocking(Dispatchers.IO) { bridge.getStatus().getOrThrow() }
         return buildString {
-            append("Operator bridge authenticated=")
+            append("Operator authenticated=")
             append(status.authenticated)
-            append(", harness configured=")
-            append(status.harnessConfigured)
+            append(", mode=")
+            append(status.operatorMode)
             append(", execution enabled=")
             append(status.executionEnabled)
+            append(", tools=")
+            append(if (status.availableTools.isEmpty()) "none" else status.availableTools.joinToString(", "))
             append('.')
         }
     }
 
-    private fun operatorDryRun(instruction: String, taskContext: String?): String {
-        require(instruction.isNotBlank()) { "Operator instruction cannot be empty." }
-        require(bridge.isConfigured()) { "AKUJI operator bridge is not configured on this phone." }
+    private fun operatorToolDryRun(tool: String, argumentsJson: String): String {
+        require(tool.isNotBlank()) { "Operator tool cannot be empty." }
+        require(bridge.isConfigured()) { "AKUJI direct operator bridge is not configured on this phone." }
 
-        val outcome = runBlocking {
-            bridge.runHarnessTask(
-                instruction = instruction,
-                context = taskContext,
+        val outcome = runBlocking(Dispatchers.IO) {
+            bridge.runOperatorTool(
+                tool = tool,
+                argumentsJson = argumentsJson,
                 dryRun = true,
             ).getOrThrow()
         }
@@ -238,7 +240,7 @@ class AkujiLiveVoice(
         if (!outcome.ok) {
             error(outcome.message ?: "The AKUJI operator returned an error.")
         }
-        return outcome.result ?: outcome.message ?: "The AKUJI operator accepted the dry-run task."
+        return outcome.result ?: outcome.message ?: "AKUJI validated the private tool request without executing it."
     }
 
     private fun FunctionCallPart.stringArg(name: String): String =
@@ -328,17 +330,16 @@ class AkujiLiveVoice(
         val OPERATOR_FUNCTIONS = listOf(
             FunctionDeclaration(
                 name = "operator_status",
-                description = "Check whether AKUJI's private operator bridge is authenticated, connected to its harness, and allowed to execute. Use this before relying on the private operator when its state is uncertain.",
+                description = "Check AKUJI's direct private tool gateway and return the tools that are actually connected. This gateway is not another AI model/provider.",
                 parameters = emptyMap(),
             ),
             FunctionDeclaration(
-                name = "operator_dry_run",
-                description = "Send a non-state-changing task to AKUJI's private Hermes operator. Use it for inspection, research, reasoning, planning, or preparing an action. It must not be described as having actually changed an external account or system.",
+                name = "operator_tool_dry_run",
+                description = "Validate a request for one of AKUJI's connected private tools without executing it, changing external state, or consuming a provider credit. Use operator_status first when the available tools are uncertain.",
                 parameters = mapOf(
-                    "instruction" to Schema.string("The exact task for the private operator."),
-                    "context" to Schema.string("Relevant context the operator needs to do the task accurately."),
+                    "tool" to Schema.string("Exact connected tool name returned by operator_status."),
+                    "arguments_json" to Schema.string("A JSON object string containing the tool arguments."),
                 ),
-                optionalParameters = listOf("context"),
             ),
         )
 
