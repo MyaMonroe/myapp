@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -57,44 +57,55 @@ class MainActivity : ComponentActivity() {
             val scope = rememberCoroutineScope()
             val liveVoice = remember { AkujiLiveVoice(this@MainActivity.applicationContext) }
             val sharedItem = incomingShare.value
+
             var showSkills by rememberSaveable { mutableStateOf(false) }
             var liveActive by remember { mutableStateOf(false) }
-            var liveStatus by remember { mutableStateOf("LIVE OFF") }
-            var liveCaption by remember { mutableStateOf("") }
+            var presence by remember { mutableStateOf(AkujiPresenceState.Ready) }
+            var liveCaption by remember { mutableStateOf("Tap TALK to speak to AKUJI.") }
+            var speechPulse by remember { mutableIntStateOf(0) }
             var pendingSessionContext by remember { mutableStateOf<String?>(null) }
 
             fun beginLiveVoice(sessionContext: String?) {
                 if (liveActive) return
-                liveStatus = "CONNECTING LIVE VOICE"
+
+                presence = AkujiPresenceState.Connecting
                 liveCaption = if (sessionContext.isNullOrBlank()) {
-                    "Loading AKUJI skills and waiting for the microphone conversation to become active..."
+                    "Connecting AKUJI's live voice, memory, and skills..."
                 } else {
-                    "Loading AKUJI skills plus the item you shared..."
+                    "Connecting AKUJI with the item you shared..."
                 }
+
                 scope.launch {
                     runCatching {
                         liveVoice.start(
                             sessionContext = sessionContext,
                             onInputTranscript = { text ->
-                                scope.launch { liveCaption = "YOU: $text" }
+                                scope.launch {
+                                    presence = AkujiPresenceState.Listening
+                                    liveCaption = "YOU: $text"
+                                }
                             },
                             onOutputTranscript = { text ->
-                                scope.launch { liveCaption = "AKUJI: $text" }
+                                scope.launch {
+                                    presence = AkujiPresenceState.Speaking
+                                    speechPulse += 1
+                                    liveCaption = "AKUJI: $text"
+                                }
                             },
                         )
                     }.onSuccess {
                         liveActive = true
-                        liveStatus = if (sessionContext.isNullOrBlank()) "LIVE LISTENING" else "LIVE + SHARED ITEM"
+                        presence = AkujiPresenceState.Listening
                         val count = liveVoice.bundledSkillCount
                         liveCaption = if (sessionContext.isNullOrBlank()) {
-                            "Mic is active. $count bundled AKUJI skill" +
-                                if (count == 1) " is active." else "s are active."
+                            "AKUJI is listening. $count bundled skill" +
+                                if (count == 1) " is loaded." else "s are loaded."
                         } else {
-                            "Mic is active. $count bundled skills + your shared item are loaded."
+                            "AKUJI is listening with your shared item and $count bundled skills loaded."
                         }
                     }.onFailure { error ->
                         liveActive = false
-                        liveStatus = "LIVE ERROR"
+                        presence = AkujiPresenceState.Error
                         liveCaption = error.message ?: "AKUJI could not start Live voice."
                     }
                 }
@@ -107,7 +118,7 @@ class MainActivity : ComponentActivity() {
                     beginLiveVoice(pendingSessionContext)
                 } else {
                     liveActive = false
-                    liveStatus = "MICROPHONE BLOCKED"
+                    presence = AkujiPresenceState.MicrophoneBlocked
                     liveCaption = "AKUJI needs microphone permission for Live voice."
                 }
             }
@@ -127,8 +138,8 @@ class MainActivity : ComponentActivity() {
                 if (liveActive || liveVoice.isActive) {
                     liveVoice.stop()
                     liveActive = false
-                    liveStatus = "LIVE OFF"
-                    liveCaption = ""
+                    presence = AkujiPresenceState.Ready
+                    liveCaption = "AKUJI Live is off. Tap TALK when you want her."
                     return
                 }
 
@@ -154,74 +165,14 @@ class MainActivity : ComponentActivity() {
                 AkujiSkillsScreen(onBack = { showSkills = false })
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    AkujiApp()
-
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalAlignment = Alignment.End,
-                    ) {
-                        TextButton(
-                            onClick = ::toggleLiveVoice,
-                            modifier = Modifier
-                                .background(Color(0xCC120B16), RoundedCornerShape(100.dp))
-                                .border(1.dp, Color(0x88C9A84C), RoundedCornerShape(100.dp)),
-                        ) {
-                            Text(
-                                text = if (liveActive) "STOP LIVE" else "LIVE",
-                                color = Color(0xFFF1D99B),
-                                fontWeight = FontWeight.Black,
-                                fontSize = 10.sp,
-                                letterSpacing = 1.sp,
-                            )
-                        }
-
-                        TextButton(
-                            onClick = { showSkills = true },
-                            modifier = Modifier
-                                .background(Color(0xCC120B16), RoundedCornerShape(100.dp))
-                                .border(1.dp, Color(0x88C9A84C), RoundedCornerShape(100.dp)),
-                        ) {
-                            Text(
-                                text = "SKILLS",
-                                color = Color(0xFFF1D99B),
-                                fontWeight = FontWeight.Black,
-                                fontSize = 10.sp,
-                                letterSpacing = 1.sp,
-                            )
-                        }
-                    }
-
-                    if (liveStatus != "LIVE OFF" || liveCaption.isNotBlank()) {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 86.dp, start = 24.dp, end = 24.dp)
-                                .background(Color(0xCC120B16), RoundedCornerShape(18.dp))
-                                .border(1.dp, Color(0x66C9A84C), RoundedCornerShape(18.dp))
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                text = liveStatus,
-                                color = Color(0xFFF1D99B),
-                                fontWeight = FontWeight.Black,
-                                fontSize = 10.sp,
-                                letterSpacing = 1.sp,
-                            )
-                            if (liveCaption.isNotBlank()) {
-                                Text(
-                                    text = liveCaption,
-                                    color = Color(0xFFF7EEDC),
-                                    fontSize = 12.sp,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
-                            }
-                        }
-                    }
+                    AkujiApp(
+                        state = presence,
+                        caption = liveCaption,
+                        speechPulse = speechPulse,
+                        liveActive = liveActive,
+                        onTalk = ::toggleLiveVoice,
+                        onSkills = { showSkills = true },
+                    )
 
                     sharedItem?.let { item ->
                         Column(
@@ -262,7 +213,11 @@ class MainActivity : ComponentActivity() {
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 TextButton(onClick = ::loadSharedIntoLive) {
-                                    Text("LOAD IN LIVE", color = Color(0xFFF1D99B), fontWeight = FontWeight.Bold)
+                                    Text(
+                                        "LOAD IN AKUJI",
+                                        color = Color(0xFFF1D99B),
+                                        fontWeight = FontWeight.Bold,
+                                    )
                                 }
                                 TextButton(onClick = { incomingShare.value = null }) {
                                     Text("DISMISS", color = Color(0xFFB9ACBC))
