@@ -95,7 +95,7 @@ fun AkujiSkillsScreen(onBack: () -> Unit) {
                             letterSpacing = 2.sp,
                         )
                         Text(
-                            text = "PORTABLE MCP / HARNESS SKILLS",
+                            text = "BUILT-IN OPERATING SKILLS",
                             color = Color(0xFFCBA3C9),
                             fontSize = 10.sp,
                             letterSpacing = 1.2.sp,
@@ -116,8 +116,7 @@ fun AkujiSkillsScreen(onBack: () -> Unit) {
                 Spacer(Modifier.height(18.dp))
 
                 Text(
-                    text = "These are the same SKILL.md files bundled for the Qwen/MCP harness. " +
-                        "They are readable inside AKUJI now; live editing and tool assignment will turn on when the harness bridge is connected.",
+                    text = "These SKILL.md files are bundled directly into AKUJI and shape how she works during Live sessions. Private tools are connected separately through the AKUJI operator bridge; no extra AI provider is implied by a skill file.",
                     color = Color(0xFFB9ACBC),
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
