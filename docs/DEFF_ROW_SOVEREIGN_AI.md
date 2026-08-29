@@ -2,114 +2,95 @@
 
 **Owner:** DEFF ROW  
 **Persistent AI identity:** AKUJI  
-**Interface:** DEFF ROW website and AKUJI Android app  
 **Status date:** 2026-08-29  
 **Working branch:** `akuji-android-foundation`  
 **Pull request:** #2 — draft, open, and not approved for merge
 
+## Truth standard
+
+A file, script, screen mockup, workflow, or successful code compilation is not proof that a working AI system or cloud deployment exists.
+
+Something is marked **working** only after it is run in the intended environment and its result is directly verified. Planned or generated code must be labeled as code only.
+
 ## Plain-language rule
 
-AKUJI is the permanent system. Gemma, Qwen, DeepSeek, Gemini, and other models are replaceable brains AKUJI may use. Changing a model must not erase AKUJI's identity, memory, permissions, tools, work history, or projects.
+AKUJI is intended to become the permanent DEFF ROW system. Gemma, Qwen, DeepSeek, Gemini, and other models will be replaceable reasoning engines. Changing a model must not erase AKUJI's identity, memory, permissions, tools, work history, or projects.
 
-Mya does not have to code or translate ordinary requests into technical commands. AKUJI must handle the technical work and ask Mya only for account sign-ins, approvals, identity checks, physical-device actions, or decisions that cannot be completed without the owner.
+Mya does not code. AKUJI must handle technical implementation and ask Mya only for account sign-ins, approvals, identity checks, physical-device actions, or owner decisions that cannot be completed without her.
+
+## Verified right now
+
+- The private GitHub repository `MyaMonroe/myapp` exists and is accessible.
+- The branch `akuji-android-foundation` exists.
+- PR #2 exists, is open, remains a draft, and is not merged.
+- The repository contains non-empty Android, bridge, workflow, and deployment-source files.
+- GitHub reports that Android build run 176 and signed-build run 160 completed successfully for commit `f804846aef5a2896386fafc3599745c91dd50fd1`.
+
+These facts prove that source files exist and GitHub compiled a build. They do not prove that the APK works on Mya's phone or that any server, model, tool, or cloud system is live.
+
+## Not verified and not to be claimed as existing
+
+- No Google Cloud project or VM has been verified.
+- No live AKUJI bridge has been verified.
+- No Cloudflare tunnel has been verified.
+- No working DEFF ROW control plane exists yet.
+- No shared external agent memory exists yet.
+- No agent-to-agent communication, durable job queue, model router, external permission controller, or audit ledger exists yet.
+- No current phone-to-server connection has been verified.
+- No Picsart execution has been verified.
+- No Gemma model installation or inference has been verified on Mya's phone.
+- No Google Live/Firebase runtime connection has been verified.
+- The files under `deploy/` are unexecuted deployment instructions unless a real host is later created and tested.
+- The files under `bridge/` are source code, not evidence of a running bridge.
 
 ## Required system shape
 
-1. The DEFF ROW website and AKUJI Android app are the owner-facing controls.
-2. The DEFF ROW control plane owns identity, work, permissions, history, and routing.
-3. The orchestrator chooses and supervises work.
-4. Models are accessed through replaceable adapters.
-5. Specialist agents perform bounded jobs.
-6. Memory and project state live outside model chat sessions.
-7. Tools and provider APIs are accessed only through the controlled tool gateway.
-8. An external permission controller decides whether sensitive actions may run.
-9. Models may request permission. Models may never grant themselves permission.
-10. Every request, approval, denial, tool call, result, failure, retry, and model change is recorded.
+1. DEFF ROW website/app
+2. DEFF ROW-owned control plane
+3. Primary orchestrator
+4. Replaceable model adapters for Qwen, Gemma, DeepSeek, and other models
+5. Specialist agents
+6. Shared external memory and project state
+7. Controlled tools and APIs
+8. Permission controller outside every model
+9. Append-only audit and event history
+10. Human approval gates for sensitive actions
 
-## Verified existing foundation
+Models may request permission. Models may never grant themselves permission.
 
-### AKUJI Android
+## Permanent components to build
 
-- Android package: `com.deffrow.akuji`
-- Phone interface, voice, local memory, searchable imported archives, and bundled skills exist on the branch.
-- Local memory can preserve facts, the active task, checkpoints, parked items, and transcripts.
-- Gemma can run through AKUJI's local LiteRT-LM connector when its model file is installed.
-- Google Live is currently available as a conversation and voice layer.
-- The model connector is replaceable; the app body, local memory, and identity do not have to change with it.
-
-### Direct tool bridge
-
-- Existing service: `bridge/app.py`
-- Authenticated status endpoint: `GET /v1/status`
-- Authenticated tool endpoint: `POST /v1/operator/tool`
-- Execution is disabled by default.
-- Dry-run validates a requested tool without performing the external action.
-- Current tools:
-  - `bridge_echo`
-  - `picsart_remove_background` when Picsart is deliberately connected
-- The bridge is a tool gateway, not AKUJI's identity or brain.
-- Deployment binds the bridge to `127.0.0.1:8787` and uses a Cloudflare tunnel.
-
-### Build state
-
-- Latest checked branch commit: `f804846aef5a2896386fafc3599745c91dd50fd1`
-- "Build AKUJI Android APK" run 176: passed.
-- "Build permanently signed AKUJI APK" run 160: passed.
-- PR #2 remains a draft and must not be merged until the live bridge and phone tests pass.
-
-## Current boundaries
-
-- The current bridge is not yet the full sovereign control plane.
-- Shared external memory, agent-to-agent communication, the durable job queue, model routing, centralized approval records, and full failure recovery are not yet implemented.
-- The live VM deployment has not been re-verified from this record.
-- The full phone-to-bridge dry-run has not been re-verified from this record.
-- Harness remains an available development resource. Hermes is not an active dependency in the current PR architecture.
-- No passwords, private signing material, API keys, tokens, or owner secrets belong in this file or repository.
-
-## Permanent control-plane components
-
-The control plane will be added as a separate service boundary so the Android app, website, models, agents, and tools can change independently.
-
-- **Identity registry:** AKUJI's identity, rules, ownership, and version.
-- **Project registry:** DEFF ROW projects, status, checkpoints, and dependencies.
-- **Orchestrator:** accepts work, creates tasks, delegates jobs, and replans failures.
-- **Agent registry:** specialist roles, capabilities, limits, and active assignments.
-- **Model router:** Qwen, Gemma, DeepSeek, Gemini, and later-model adapters.
-- **Memory service:** durable facts, decisions, task state, summaries, and source links.
-- **Task and event queue:** scheduled and long-running work, retries, leases, and recovery.
-- **Tool gateway:** approved browser, file, API, website, and provider actions.
-- **Permission controller:** owner rules and human approval gates outside all models.
-- **Audit ledger:** append-only record of decisions, permissions, actions, and results.
-
-## Permission rule
-
-Every external action is classified before execution:
-
-- **Read:** may run when the owner policy permits it.
-- **Write:** requires an explicit stored rule or owner approval.
-- **Sensitive:** always pauses for the owner's approval.
-- **Forbidden:** cannot run even if a model asks.
-
-The orchestrator, specialist agents, and model adapters can create permission requests. Only the permission controller can return an authorization decision.
+- Identity registry
+- Project registry
+- Orchestrator
+- Agent registry and agent communication
+- Model router and provider adapters
+- External memory service
+- Durable task/event queue with retries and recovery
+- Tool gateway
+- External permission controller
+- Append-only audit ledger
+- DEFF ROW website/app interface
 
 ## Implementation order
 
-1. Keep this record current.
-2. Re-verify the live bridge and phone connection.
-3. Define the shared request, task, permission, result, and audit-event formats.
-4. Build the external permission controller and append-only audit ledger.
-5. Add persistent external memory and the project registry.
-6. Add the durable task/event queue, worker leases, retries, and recovery.
-7. Add the orchestrator and specialist-agent registry.
-8. Add the model router and Qwen, Gemma, and DeepSeek adapters.
-9. Move every tool behind the controlled gateway.
-10. Connect the website and Android app to the control plane.
-11. Test model replacement, restart recovery, denied permissions, and complete audit history.
+1. Inspect and validate the APK produced by the successful GitHub build.
+2. Install and test that exact APK on the phone.
+3. Record which phone features actually work.
+4. Build the first runnable DEFF ROW control-plane service in the repository.
+5. Add the permission controller and audit ledger.
+6. Add persistent external memory and project records.
+7. Add the durable queue, retries, and recovery.
+8. Add the orchestrator and specialist-agent registry.
+9. Add replaceable Qwen, Gemma, and DeepSeek adapters.
+10. Put every tool behind the permission-controlled gateway.
+11. Connect the Android app and DEFF ROW website.
+12. Create cloud infrastructure only when a real deployment is ready to be run and verified.
 
 ## Next verified action
 
-Inspect the current bridge deployment and complete an authenticated dry-run from AKUJI Android through the bridge. Do not enable real provider execution during this test.
+Download and inspect the APK artifact that GitHub says it built. Do not ask Mya to create a cloud project or run code.
 
 ## Owner action needed now
 
-None. GitHub repository access is already available through the connected GitHub account. A forgotten GitHub password does not block the current repository work.
+None. GitHub access is already connected. Mya will only be asked to install the verified APK on the phone after the artifact itself has been checked.
