@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "211140948750",
+    "firebase_url": "https://akuji-core-default-rtdb.firebaseio.com",
+    "project_id": "akuji-core",
+    "storage_bucket": "akuji-core.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:211140948750:android:902ede834fafcdc4f7dd5f",
+        "android_client_info": {
+          "package_name": "com.deffrow.akuji"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "211140948750-p88jbkpjhr7bhmahmr5tvljas8ejk589.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNszeWFDQZw90SeWdLFIZ0VFedeTVrBGw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "211140948750-dhrno8eoj6s44he6c7au12p94h54fcdp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

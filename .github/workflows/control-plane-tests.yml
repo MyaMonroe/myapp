@@ -1,0 +1,32 @@
+name: Control plane tests
+
+on:
+  pull_request:
+    paths:
+      - "control_plane/**"
+      - ".github/workflows/control-plane-tests.yml"
+  push:
+    branches:
+      - akuji-android-foundation
+    paths:
+      - "control_plane/**"
+      - ".github/workflows/control-plane-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile control plane
+        run: python -m compileall -q control_plane
+      - name: Prove persistence and permission boundaries
+        run: python -m unittest discover -s control_plane/tests -v
+      - name: Build portable image
+        run: docker build -f control_plane/Dockerfile -t deffrow-control-plane:test .
