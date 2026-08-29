@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#160d23">
+  <title>DEFF ROW — AKUJI</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f7f1ff;
+      --muted: #b9acc8;
+      --plum-950: #100919;
+      --plum-900: #160d23;
+      --plum-800: #241333;
+      --plum-700: #382047;
+      --gold: #f6c453;
+      --gold-2: #ffe49a;
+      --blue: #386cf6;
+      --green: #4ad7a2;
+      --red: #ff6f8c;
+      --line: rgba(255,255,255,.11);
+      --card: rgba(255,255,255,.055);
+      --shadow: 0 22px 70px rgba(0,0,0,.38);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--plum-950); color: var(--ink); }
+    body {
+      background:
+        radial-gradient(circle at 85% -10%, rgba(56,108,246,.32), transparent 32rem),
+        radial-gradient(circle at -10% 25%, rgba(130,55,160,.24), transparent 29rem),
+        linear-gradient(160deg, var(--plum-950), var(--plum-900) 62%, #0c0b18);
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { width: min(100%, 980px); min-height: 100vh; min-height: 100dvh; margin: auto; padding: 18px 18px 100px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: max(6px, env(safe-area-inset-top)) 0 18px; }
+    .brand { display: flex; align-items: center; gap: 11px; }
+    .mark { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(246,196,83,.6); border-radius: 13px; color: var(--gold); font-weight: 900; background: linear-gradient(145deg, rgba(246,196,83,.16), rgba(56,108,246,.11)); box-shadow: 0 0 30px rgba(246,196,83,.12); }
+    .brand strong { letter-spacing: .15em; font-size: .92rem; }
+    .brand span { display: block; margin-top: 2px; color: var(--muted); font-size: .72rem; letter-spacing: .06em; }
+    .connection { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: .75rem; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 8px 10px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 4px rgba(255,111,140,.1); }
+    .dot.live { background: var(--green); box-shadow: 0 0 0 4px rgba(74,215,162,.1); }
+    .hero { position: relative; overflow: hidden; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.025)); box-shadow: var(--shadow); border-radius: 24px; padding: 24px; }
+    .hero:after { content: "A"; position: absolute; right: -12px; bottom: -60px; color: rgba(246,196,83,.055); font-size: 14rem; font-weight: 950; line-height: 1; }
+    .eyebrow { color: var(--gold); text-transform: uppercase; font-weight: 800; letter-spacing: .13em; font-size: .7rem; }
+    h1 { position: relative; z-index: 1; margin: 7px 0 5px; font-size: clamp(2rem, 8vw, 4rem); line-height: .95; letter-spacing: -.045em; }
+    .hero p { position: relative; z-index: 1; max-width: 34rem; margin: 10px 0 0; color: var(--muted); line-height: 1.55; font-size: .92rem; }
+    .stats { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 22px; }
+    .stat { padding: 13px 12px; border-radius: 15px; border: 1px solid var(--line); background: rgba(8,5,14,.28); }
+    .stat b { display: block; font-size: 1.25rem; }
+    .stat small { color: var(--muted); font-size: .67rem; }
+    .view { display: none; padding-top: 18px; }
+    .view.active { display: block; animation: enter .22s ease; }
+    @keyframes enter { from { opacity: 0; transform: translateY(5px); } }
+    .section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 5px 1px 12px; }
+    h2 { margin: 0; font-size: 1.18rem; letter-spacing: -.02em; }
+    .section-head p { margin: 3px 0 0; color: var(--muted); font-size: .75rem; }
+    .card { border: 1px solid var(--line); background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 10px; backdrop-filter: blur(18px); }
+    .card-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .card-title strong { font-size: .86rem; }
+    .card p { color: var(--muted); margin: 0; line-height: 1.48; font-size: .84rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .meta { color: var(--muted); font-size: .66rem; margin-top: 9px; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 5px 8px; font-size: .63rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; background: rgba(56,108,246,.17); color: #adc2ff; }
+    .badge.approved, .badge.completed, .badge.ready { color: #9af0ce; background: rgba(74,215,162,.12); }
+    .badge.denied, .badge.failed, .badge.forbidden { color: #ff9fb1; background: rgba(255,111,140,.12); }
+    .badge.pending, .badge.queued { color: var(--gold-2); background: rgba(246,196,83,.12); }
+    .messages { min-height: 215px; max-height: 48vh; overflow-y: auto; scroll-behavior: smooth; padding: 6px 1px 14px; }
+    .message { width: fit-content; max-width: 88%; margin: 8px 0; border-radius: 17px 17px 17px 5px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); line-height: 1.45; white-space: pre-wrap; font-size: .88rem; }
+    .message.owner { margin-left: auto; border-radius: 17px 17px 5px 17px; background: linear-gradient(145deg, #3c6ff7, #264bba); border-color: rgba(255,255,255,.18); }
+    .composer { position: sticky; bottom: 78px; display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 8px; border: 1px solid var(--line); background: rgba(22,13,35,.92); backdrop-filter: blur(20px); border-radius: 20px; box-shadow: var(--shadow); }
+    textarea, input, select { width: 100%; border: 1px solid var(--line); background: rgba(5,3,10,.3); color: var(--ink); border-radius: 13px; padding: 12px; outline: none; }
+    textarea:focus, input:focus, select:focus { border-color: rgba(246,196,83,.65); box-shadow: 0 0 0 3px rgba(246,196,83,.08); }
+    textarea { resize: none; min-height: 46px; max-height: 130px; }
+    .primary, .secondary, .danger { border: 0; border-radius: 13px; min-height: 44px; padding: 0 16px; font-weight: 850; }
+    .primary { color: #1d1200; background: linear-gradient(135deg, var(--gold-2), var(--gold)); }
+    .secondary { color: var(--ink); background: rgba(56,108,246,.2); border: 1px solid rgba(83,127,255,.35); }
+    .danger { color: #ffc0cd; background: rgba(255,111,140,.12); border: 1px solid rgba(255,111,140,.26); }
+    .small { min-height: 36px; padding: 0 12px; font-size: .73rem; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+    .form { display: grid; gap: 9px; }
+    label { color: var(--muted); font-size: .7rem; }
+    label input, label textarea, label select { display: block; margin-top: 5px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .empty { text-align: center; padding: 30px 16px; color: var(--muted); font-size: .82rem; border: 1px dashed var(--line); border-radius: 18px; }
+    nav { position: fixed; z-index: 20; left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom)); width: min(calc(100% - 24px), 650px); display: grid; grid-template-columns: repeat(5,1fr); padding: 7px; background: rgba(17,9,26,.92); border: 1px solid var(--line); border-radius: 21px; backdrop-filter: blur(22px); box-shadow: var(--shadow); }
+    nav button { border: 0; color: var(--muted); background: transparent; border-radius: 14px; padding: 9px 2px 8px; font-size: .64rem; }
+    nav button span { display: block; font-size: 1rem; margin-bottom: 2px; }
+    nav button.active { color: var(--gold-2); background: rgba(246,196,83,.1); }
+    dialog { width: min(calc(100% - 28px), 480px); color: var(--ink); background: linear-gradient(150deg, #241333, #120b1c); border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); padding: 22px; }
+    dialog::backdrop { background: rgba(5,2,9,.78); backdrop-filter: blur(8px); }
+    dialog h2 { font-size: 1.5rem; }
+    dialog p { color: var(--muted); font-size: .82rem; line-height: 1.5; }
+    .note { border-left: 3px solid var(--gold); padding: 9px 11px; margin: 12px 0; background: rgba(246,196,83,.08); color: var(--gold-2); font-size: .73rem; line-height: 1.4; }
+    .toast { position: fixed; z-index: 50; left: 50%; top: 18px; transform: translate(-50%, -120px); max-width: calc(100% - 28px); color: var(--ink); background: #2a1838; border: 1px solid var(--line); border-radius: 13px; padding: 11px 14px; box-shadow: var(--shadow); font-size: .8rem; transition: transform .22s ease; }
+    .toast.show { transform: translate(-50%, 0); }
+    .split { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .69rem; overflow-wrap: anywhere; }
+    @media (min-width: 720px) {
+      .shell { padding: 28px 30px 110px; }
+      .hero { padding: 34px; }
+      .stats { width: min(520px, 75%); }
+      .desktop-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 12px; }
+      .composer { bottom: 88px; }
+    }
+    @media (max-width: 430px) {
+      .grid { grid-template-columns: 1fr; }
+      .hero { padding: 21px; }
+      .connection span:last-child { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toast" id="toast"></div>
+  <main class="shell">
+    <header>
+      <div class="brand"><div class="mark">DR</div><div><strong>DEFF ROW</strong><span>SOVEREIGN SYSTEM</span></div></div>
+      <button class="connection" id="connectionButton" type="button"><span class="dot" id="connectionDot"></span><span id="connectionText">Locked</span></button>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow">Your control plane</div>
+      <h1>AKUJI</h1>
+      <p id="heroLine">Identity, memory, work and permissions live here—not inside any one model.</p>
+      <div class="stats">
+        <div class="stat"><b id="memoryCount">—</b><small>Memories</small></div>
+        <div class="stat"><b id="taskCount">—</b><small>Tasks</small></div>
+        <div class="stat"><b id="approvalCount">—</b><small>Approvals</small></div>
+      </div>
+    </section>
+
+    <section class="view active" data-view="talk">
+      <div class="section-head"><div><h2>Talk to AKUJI</h2><p>Every message stays in your database.</p></div></div>
+      <div class="messages" id="messages"><div class="empty">Unlock the control plane to begin.</div></div>
+      <form class="composer" id="chatForm">
+        <textarea id="chatInput" aria-label="Message AKUJI" placeholder="Tell AKUJI what to remember or do…" rows="1"></textarea>
+        <button class="primary" type="submit">Send</button>
+      </form>
+    </section>
+
+    <section class="view" data-view="tasks">
+      <div class="section-head"><div><h2>Work queue</h2><p>Tasks survive restarts and recover expired work.</p></div><button class="secondary small" id="newTaskButton">New task</button></div>
+      <div id="tasksList"></div>
+    </section>
+
+    <section class="view" data-view="memory">
+      <div class="section-head"><div><h2>Shared memory</h2><p>Owned by DEFF ROW, not the active model.</p></div><button class="secondary small" id="newMemoryButton">Add memory</button></div>
+      <div id="memoryList"></div>
+    </section>
+
+    <section class="view" data-view="approvals">
+      <div class="section-head"><div><h2>Permission gate</h2><p>Models can ask. Only your owner key can decide.</p></div></div>
+      <div id="permissionList"></div>
+    </section>
+
+    <section class="view" data-view="system">
+      <div class="section-head"><div><h2>System truth</h2><p>Verified state, engines and audit chain.</p></div></div>
+      <div class="desktop-grid">
+        <div>
+          <div class="card"><div class="card-title"><strong>Identity</strong><span class="badge ready">Persistent</span></div><p id="identityText">Locked</p></div>
+          <div class="card"><div class="card-title"><strong>Audit chain</strong><span class="badge pending" id="auditBadge">Unknown</span></div><p id="auditText">Unlock to verify the append-only history.</p></div>
+        </div>
+        <div class="card"><div class="card-title"><strong>Replaceable model engines</strong></div><div id="modelsList"></div></div>
+      </div>
+      <div class="actions"><button class="secondary" id="refreshButton">Refresh truth</button><button class="danger" id="lockButton">Lock this phone</button></div>
+    </section>
+  </main>
+
+  <nav aria-label="Main navigation">
+    <button class="active" data-tab="talk"><span>◉</span>Talk</button>
+    <button data-tab="tasks"><span>✓</span>Tasks</button>
+    <button data-tab="memory"><span>◇</span>Memory</button>
+    <button data-tab="approvals"><span>⚿</span>Approve</button>
+    <button data-tab="system"><span>⌁</span>System</button>
+  </nav>
+
+  <dialog id="keyDialog">
+    <form method="dialog" class="form" id="keyForm">
+      <div><div class="eyebrow">Private access</div><h2>Unlock DEFF ROW</h2><p>Use the keys created when your control plane was installed. They stay in this browser tab and are not saved in the code.</p></div>
+      <label>Client key<input id="clientKey" type="password" autocomplete="off" placeholder="Required for AKUJI and agents"></label>
+      <label>Owner approval key<input id="ownerKey" type="password" autocomplete="off" placeholder="Separate key for your approvals"></label>
+      <div class="note">Never give the owner approval key to a model or agent.</div>
+      <button class="primary" id="unlockButton" value="default" type="submit">Unlock my system</button>
+    </form>
+  </dialog>
+
+  <dialog id="entryDialog">
+    <form method="dialog" class="form" id="entryForm">
+      <div><div class="eyebrow" id="entryEyebrow">New</div><h2 id="entryTitle">Add item</h2></div>
+      <label id="entryLabel">Text<textarea id="entryText" rows="4"></textarea></label>
+      <input id="entryMode" type="hidden">
+      <div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary" id="entrySave" value="default" type="submit">Save</button></div>
+    </form>
+  </dialog>
+
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+    const $$ = (selector) => [...document.querySelectorAll(selector)];
+    const state = {
+      client: sessionStorage.getItem('deffrow_client') || '',
+      owner: sessionStorage.getItem('deffrow_owner') || '',
+      status: null
+    };
+
+    function token(ownerOnly = false) {
+      return ownerOnly ? state.owner : (state.client || state.owner);
+    }
+
+    async function api(path, options = {}, ownerOnly = false) {
+      const key = token(ownerOnly);
+      if (!key) throw new Error(ownerOnly ? 'Enter the separate owner approval key first.' : 'Unlock your system first.');
+      const response = await fetch(path, {
+        ...options,
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', ...(options.headers || {}) }
+      });
+      const data = response.status === 204 ? null : await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+      return data;
+    }
+
+    let toastTimer;
+    function toast(message) {
+      const node = $('#toast');
+      node.textContent = message;
+      node.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => node.classList.remove('show'), 3200);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+    }
+
+    function readableTime(value) {
+      if (!value) return '';
+      return new Date(value).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+    }
+
+    function setConnected(connected) {
+      $('#connectionDot').classList.toggle('live', connected);
+      $('#connectionText').textContent = connected ? 'Private & running' : 'Locked';
+    }
+
+    function openKeys() {
+      $('#clientKey').value = state.client;
+      $('#ownerKey').value = state.owner;
+      $('#keyDialog').showModal();
+    }
+
+    async function loadAll() {
+      if (!token()) { setConnected(false); openKeys(); return; }
+      try {
+        const [status, conversation, tasks, memories, permissions, identity, models, audit] = await Promise.all([
+          api('/api/status'), api('/api/conversation'), api('/api/tasks'), api('/api/memories'),
+          api('/api/permissions'), api('/api/identity'), api('/api/models'), api('/api/audit/verify')
+        ]);
+        state.status = status;
+        renderStatus(status);
+        renderConversation(conversation);
+        renderTasks(tasks);
+        renderMemories(memories);
+        renderPermissions(permissions);
+        renderSystem(identity, models, audit);
+        setConnected(true);
+      } catch (error) {
+        setConnected(false);
+        toast(error.message);
+        openKeys();
+      }
+    }
+
+    function renderStatus(status) {
+      $('#memoryCount').textContent = status.memories;
+      $('#taskCount').textContent = status.tasks_total;
+      $('#approvalCount').textContent = status.permissions_pending;
+      $('#heroLine').textContent = `${status.identity} is running. Active brain: ${status.active_model}. Identity and history remain here when that brain changes.`;
+    }
+
+    function renderConversation(items) {
+      const node = $('#messages');
+      node.innerHTML = items.length ? items.map(item => `<div class="message ${item.role}">${escapeHtml(item.content)}</div>`).join('') : '<div class="empty">AKUJI is ready. Try “status” or “remember my first rule is truth.”</div>';
+      node.scrollTop = node.scrollHeight;
+    }
+
+    function renderTasks(items) {
+      $('#tasksList').innerHTML = items.length ? items.map(item => `<article class="card"><div class="card-title"><strong>${escapeHtml(item.title)}</strong><span class="badge ${escapeHtml(item.status)}">${escapeHtml(item.status.replaceAll('_',' '))}</span></div><p>${escapeHtml(item.last_error || (item.status === 'queued' ? 'Waiting for an agent.' : 'Recorded in the persistent queue.'))}</p><div class="meta">Attempts ${item.attempts}/${item.max_attempts} · ${readableTime(item.created_at)}</div></article>`).join('') : '<div class="empty">No tasks yet.</div>';
+    }
+
+    function renderMemories(items) {
+      $('#memoryList').innerHTML = items.length ? items.map(item => `<article class="card"><div class="card-title"><strong>${escapeHtml(item.kind)}</strong><span class="badge">${escapeHtml(item.source)}</span></div><p>${escapeHtml(item.content)}</p><div class="meta">${readableTime(item.created_at)}</div></article>`).join('') : '<div class="empty">No saved memory yet.</div>';
+    }
+
+    function renderPermissions(items) {
+      $('#permissionList').innerHTML = items.length ? items.map(item => `<article class="card"><div class="card-title"><strong>${escapeHtml(item.action)}</strong><span class="badge ${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></div><p>${escapeHtml(item.resource)}</p><div class="meta">Asked by ${escapeHtml(item.requested_by)} · Risk: ${escapeHtml(item.risk)} · ${escapeHtml(item.reason)}</div>${item.status === 'pending' ? `<div class="actions"><button class="primary small decision" data-id="${escapeHtml(item.id)}" data-decision="approved">Approve</button><button class="danger small decision" data-id="${escapeHtml(item.id)}" data-decision="denied">Deny</button></div>` : ''}</article>`).join('') : '<div class="empty">No permission requests.</div>';
+      $$('.decision').forEach(button => button.addEventListener('click', decidePermission));
+    }
+
+    function renderSystem(identity, models, audit) {
+      $('#identityText').textContent = `${identity.name}, owned by ${identity.owner}. Version ${identity.version}. ${identity.rules.permission_rule}`;
+      $('#auditBadge').textContent = audit.valid ? 'Verified' : 'Broken';
+      $('#auditBadge').className = `badge ${audit.valid ? 'approved' : 'denied'}`;
+      $('#auditText').textContent = audit.valid ? `${audit.events} append-only events verified. Head ${audit.head_hash.slice(0,16)}…` : `Verification failed at event ${audit.failed_sequence}.`;
+      $('#modelsList').innerHTML = models.map(model => `<div class="split" style="padding:9px 0;border-bottom:1px solid var(--line)"><div><strong style="font-size:.82rem">${escapeHtml(model.name)}</strong><div class="meta">${escapeHtml(model.adapter_type.replaceAll('_',' '))}</div></div><span class="badge ${model.active ? 'ready' : 'pending'}">${model.active ? 'active' : escapeHtml(model.status.replaceAll('_',' '))}</span></div>`).join('');
+    }
+
+    async function decidePermission(event) {
+      if (!state.owner) { openKeys(); toast('Enter your separate owner approval key.'); return; }
+      const button = event.currentTarget;
+      try {
+        await api(`/api/permissions/${button.dataset.id}/decision`, {method:'POST', body:JSON.stringify({decision:button.dataset.decision})}, true);
+        toast(`Permission ${button.dataset.decision}.`);
+        await loadAll();
+      } catch (error) { toast(error.message); }
+    }
+
+    $('#keyForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      state.client = $('#clientKey').value.trim();
+      state.owner = $('#ownerKey').value.trim();
+      sessionStorage.setItem('deffrow_client', state.client);
+      sessionStorage.setItem('deffrow_owner', state.owner);
+      $('#keyDialog').close();
+      await loadAll();
+    });
+
+    $('#chatForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const input = $('#chatInput');
+      const message = input.value.trim();
+      if (!message) return;
+      input.value = '';
+      $('#messages').insertAdjacentHTML('beforeend', `<div class="message owner">${escapeHtml(message)}</div><div class="message" id="thinking">Working…</div>`);
+      try {
+        const result = await api('/api/chat', {method:'POST', body:JSON.stringify({message})});
+        $('#thinking').textContent = result.reply;
+        await refreshData();
+      } catch (error) { $('#thinking').remove(); toast(error.message); }
+    });
+
+    async function refreshData() {
+      try {
+        const [status, tasks, memories, permissions] = await Promise.all([api('/api/status'), api('/api/tasks'), api('/api/memories'), api('/api/permissions')]);
+        renderStatus(status); renderTasks(tasks); renderMemories(memories); renderPermissions(permissions);
+      } catch (error) { toast(error.message); }
+    }
+
+    function openEntry(mode) {
+      $('#entryMode').value = mode;
+      $('#entryEyebrow').textContent = mode === 'task' ? 'Work queue' : 'Shared memory';
+      $('#entryTitle').textContent = mode === 'task' ? 'Create a task' : 'Add a memory';
+      $('#entryLabel').firstChild.textContent = mode === 'task' ? 'What needs to be done' : 'What AKUJI must remember';
+      $('#entryText').value = '';
+      $('#entryDialog').showModal();
+    }
+
+    $('#entryForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const mode = $('#entryMode').value;
+      const value = $('#entryText').value.trim();
+      if (!value) return;
+      try {
+        await api(mode === 'task' ? '/api/tasks' : '/api/memories', {method:'POST', body:JSON.stringify(mode === 'task' ? {title:value} : {content:value})});
+        $('#entryDialog').close(); toast(mode === 'task' ? 'Task saved.' : 'Memory saved.'); await refreshData();
+      } catch (error) { toast(error.message); }
+    });
+
+    $$('nav button').forEach(button => button.addEventListener('click', () => {
+      $$('nav button').forEach(item => item.classList.toggle('active', item === button));
+      $$('.view').forEach(view => view.classList.toggle('active', view.dataset.view === button.dataset.tab));
+    }));
+    $('#connectionButton').addEventListener('click', openKeys);
+    $('#newTaskButton').addEventListener('click', () => openEntry('task'));
+    $('#newMemoryButton').addEventListener('click', () => openEntry('memory'));
+    $('#refreshButton').addEventListener('click', loadAll);
+    $('#lockButton').addEventListener('click', () => { sessionStorage.clear(); state.client = ''; state.owner = ''; setConnected(false); openKeys(); });
+    loadAll();
+  </script>
+</body>
+</html>
