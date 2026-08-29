@@ -43,6 +43,34 @@ These facts prove that source files exist and GitHub compiled a build. They do n
 - The files under `deploy/` are unexecuted deployment instructions unless a real host is later created and tested.
 - The files under `bridge/` are source code, not evidence of a running bridge.
 
+## Drive recovery audit
+
+The Google Drive recovery folders are real and their files are not empty. They are evidence and source material, not proof of a deployed system.
+
+- Two recovery folders contain exact duplicate copies of `01_AKUJI_MASTER_BUILD.txt` and `03_AI_BUILD.txt`.
+- `00_USE_THIS_NOW_AKUJI_ACTIVE_CORE.txt` is the usable identity and operating-policy seed. Its truth, ownership, security, permission, and phone-first rules are retained.
+- `00_TAP_THIS_AKUJI_COMPLETE_CORE.txt`, `01_AKUJI_MASTER_BUILD.txt`, and the large "AKUJI COMPLETE PHONE CORE — SOURCE" document are primarily historical conversation and memory compilations. They are not executable software.
+- The historical master files contain false capability claims and unsafe pseudo-authorizations, including claims about bypassing subscriptions, financial accounts, device locks, algorithms, and private systems. Those statements are quarantined as historical text and must never become AKUJI permissions or tool instructions.
+- `06_RECONSTRUCTION_INDEX.txt` is a useful map of prior ideas, but its account and infrastructure claims require current verification.
+- `07_TAVUS_STYLE_BLUEPRINT.txt` is a conceptual architecture. It does not prove that a Google project, TPU cluster, model rig, WebRTC stream, domain endpoint, or deployment exists.
+- The backend inventory statement that Firebase/Google Cloud project activity exists is contradicted by the owner and is retired unless new direct evidence establishes otherwise.
+- Drive content may seed identity and requirements only after removing false capability claims, unsafe instructions, secrets, duplication, and outdated status claims.
+
+## APK artifact verification
+
+GitHub's signed-build artifact is real and non-empty:
+
+- Artifact: `AKUJI-permanent-apk`
+- GitHub artifact size: 34,325,305 bytes
+- ZIP checksum: `57455d74dec5677dbb5b29f3af3fde709443f7b077ac98371acde25ab5752937`
+- The downloaded checksum exactly matched GitHub's recorded digest.
+- The ZIP contains one `app-release.apk` measuring 83,838,843 bytes.
+- The APK passed an archive-integrity test.
+- The APK contains an Android APK signing block.
+- GitHub's signed-build log reports `BUILD SUCCESSFUL`, APK Signature Scheme v2 verification `true`, and one signer.
+
+This proves that GitHub produced a structurally valid signed Android package. It does not prove that every advertised feature works on Mya's phone.
+
 ## Required system shape
 
 1. DEFF ROW website/app
